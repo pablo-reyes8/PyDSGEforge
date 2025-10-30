@@ -133,6 +133,10 @@ def _newton_damped(F_fun, J_fun, y0: np.ndarray, cfg: SteadyConfig) -> Tuple[np.
     report.update({"converged": False, "it": cfg.max_iter, "f_norm": _norm_inf(np.atleast_1d(np.array(F_fun(y), dtype=float).squeeze()))})
     return y, report
 
+
+############ Wrapper Principal ################
+
+
 def solve_steady(
     equations: Iterable[Union[Expr, sp.Eq]],
     y_t: Iterable[Sym],
@@ -184,3 +188,51 @@ def solve_steady(
     y_star, rep = _newton_damped(F_fun, J_fun, y0, cfg)
     sv = {sym: float(y_star[i]) for i, sym in enumerate(ybar_syms)}
     return sv, {"method": "newton", **rep}
+
+
+
+######## For implementation with build matrices ########### 
+
+def complete_steady_values(
+    sv_core: dict,
+    y_t, y_tp1=None, y_tm1=None, eps_t=None, eta_t=None):
+    """
+    Toma el steady en t (sv_core: {y_t_symbol -> value})
+    y lo completa con:
+    - y_{t+1} = y_t (por nombre)
+    - y_{t-1} = y_t (por nombre)
+    - shocks = 0, eta = 0
+    Devuelve un dict listo para build_matrices(steady_values=...).
+    """
+    sv = dict(sv_core)  # copia
+
+    name_to_curr = {str(s): s for s in y_t}
+
+    def to_curr_name(s):
+        # tus convenciones de nombres
+        return str(s).replace("tp1", "t").replace("_t1", "_t").replace("tm1", "t")
+
+    if y_tp1:
+        for s in y_tp1:
+            base = to_curr_name(s)
+            if base in name_to_curr and name_to_curr[base] in sv_core:
+                sv[s] = sv_core[name_to_curr[base]]
+            else:
+                raise ValueError(f"No puedo mapear {s} a {base} en steady.")
+
+    if y_tm1:
+        for s in y_tm1:
+            base = to_curr_name(s)
+            if base in name_to_curr and name_to_curr[base] in sv_core:
+                sv[s] = sv_core[name_to_curr[base]]
+            else:
+                raise ValueError(f"No puedo mapear {s} a {base} en steady.")
+
+    if eps_t:
+        for e in eps_t:
+            sv[e] = 0.0
+    if eta_t:
+        for h in eta_t:
+            sv[h] = 0.0
+
+    return sv
