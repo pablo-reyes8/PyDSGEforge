@@ -1,6 +1,6 @@
 # DSGE Modeling Toolkit (Python)
 
-This repository captures the core building blocks of a Dynare-style DSGE workflow implemented in Python. The code currently lives under `src/` and focuses on symbolic model definition, linearization, solution, and Bayesian inference primitives. Higher-level orchestration (for example, a `DSGE` facade, data loaders, and experiment scripts) is still under active development and intentionally omitted from this snapshot.
+This repository captures the core building blocks of a Dynare-style DSGE workflow implemented in Python. The code currently lives under `src/` and focuses on symbolic model definition, linearization, solution, and Bayesian inference primitives. A lightweight `DSGE` facade now ties those pieces together so you can go from symbolic equations and priors to steady state, MAP, and MCMC draws in a single call.
 
 ## Design Overview
 
@@ -13,17 +13,16 @@ The toolkit mirrors the familiar pipeline from model specification to empirical 
 5. **Analysis (`src/analysis/`)** - Contains impulse-response utilities that propagate draws through the solved model and plotting helpers for MCMC diagnostics.
 6. **Transformations (`src/transformations/`)** - Centralizes forward and inverse mappings (identity, exp, logistic, tanh01) that keep parameter constraints explicit and differentiable.
 
-These modules are designed to be composable: a notebook or future `DSGE` class can register a model, call `build_matrices`, solve it with `gensys`, evaluate the likelihood or posterior, and then feed draws into IRF or diagnostic helpers without duplicating boilerplate.
+These modules are designed to be composable: notebooks or scripts can register a model, call `build_matrices`, solve it with `gensys`, evaluate the likelihood or posterior, and then feed draws into IRF or diagnostic helpers without duplicating boilerplate. The `DSGE` facade included in `src/dsge.py` orchestrates the steady-state solver, MAP optimizer, and Metropolis-Hastings routines so the end-to-end workflow is a single method call.
 
 ## Current Status
 
-- Core symbolic-to-linear builder and measurement helpers.
+- Core symbolic-to-linear builder and measurement helpers, including default identity measurement if none is provided.
+- `DSGE.compute` orchestrating steady state, MAP, and adaptive Metropolis-Hastings (with optional summary logging).
 - Gensys solver with robustness features (eigenvalue sorting, fallback logic).
 - Bayesian primitives: Gaussian state-space likelihood, MAP estimation, and Metropolis-Hastings with adaptive scaling.
 - Analysis utilities: impulse-response envelopes and MCMC trace/summary plots.
-- Pending integration layers: unified `DSGE` facade, dataset loaders, experiment scripts, and automated tests.
-
-Run instructions are intentionally left out for now; the top-level orchestration layer will define the end-to-end workflow once those components stabilize.
+- Pending integration layers: dataset loaders, experiment scripts, and automated regression tests.
 
 ## `src/` Layout (working set)
 
@@ -45,7 +44,7 @@ src/
     param_registry_class.py   # Registry glue between parameters, Q/H, priors
     param_specifications.py   # ParamSpec, PriorSpec, measurement structures
   transformations/
-    param_transformations.py  # Forward and inverse parameter mappings
+    param_transformations.py  # Forward and inverse parameter mappings (logistic uses a stable implementation)
 ```
 
 ## Modeling Example
@@ -126,12 +125,50 @@ REG_NK = ParamRegistry(
 
 `ParamRegistry` is the glue between symbolic economics and numerical routines: it enforces parameter domains via smooth transforms (`id`, `exp`, `logistic`, `tanh01`), exposes priors to MAP and MCMC algorithms, and produces consistent covariance matrices that flow into the Kalman filter. Even before a high-level `DSGE` class exists, this pairing of symbolic equations and registry metadata delivers a fully functional pipeline for linearization, solution, and Bayesian estimation.
 
+### Running the Pipeline
+
+With `equations`, `y_t`, `y_tp1`, `eps_t`, and `REG_NK` defined as above, the `DSGE` facade compactly drives the steady-state solve, MAP optimization, and Metropolis-Hastings sampler:
+
+```python
+import numpy as np
+from src.dsge import DSGE
+from src.model_builders.steady import SteadyConfig
+
+model = DSGE(
+    equations=equations,
+    y_t=y_t,
+    y_tp1=y_tp1,
+    eps_t=eps_t)
+
+y_data = np.asarray(...)                 # e.g., dataframe_to_numpy(...)
+theta_guess = REG_NK.from_econ_dict({...})  # or pass a work-space vector directly
+
+results = model.compute(
+    registry=REG_NK,
+    theta_struct=theta_guess,
+    data=y_data,
+    compute_steady=True,
+    steady_cfg=SteadyConfig(max_iter=200, tol_f=1e-10),
+    div=1.0 + 1e-6,
+    map=True,
+    map_kwargs={"method": "L-BFGS-B"},
+    run_mcmc=True,
+    mcmc_draws=4000,
+    mcmc_kwargs={
+        "adapt": True,
+        "warmup": 2000,
+        "adapt_block": 100,
+        "logs": True},
+)
+```
+
+`compute(..., log_summary=True)` prints a short report with steady-state diagnostics, MAP values (work and economic space), and MCMC acceptance statistics. Disable the console output with `log_summary=False`. The returned dictionary provides structured access: `results["steady"]`, `results["map"]`, and `results["mcmc"]`.
+
 ## Roadmap
 
-- Wrap the existing primitives into a cohesive `DSGE` class with configuration-driven model assembly.
-- Add regression tests and synthetic examples that validate the linearization and solver against known models.
+- Expand automated tests and synthetic examples that validate the linearization, steady solver, and inference stack against known models.
 - Publish structured experiment scripts (data ingestion, filtering, estimation, IRFs) once the integration layer is finalized.
-- Document execution and configuration steps alongside reproducible notebooks.
+- Document configuration presets for common models (e.g., NK, RBC) and bundle reproducible notebooks.
 
 Contributions and feedback on the current architecture are welcome while the higher-level API solidifies.
 
