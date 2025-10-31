@@ -3,6 +3,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 from src.inference.likelihoods import *
 from functools import partial
 from src.inference.posteriors import *
+import pandas as pd
 
 def metropolis_hastings(
     log_posterior: Callable[[np.ndarray, np.ndarray], float],
@@ -96,6 +97,7 @@ def run_metropolis(
     eps_t,
     registry,
     *,
+    steady = None,
     y_tm1=None,
     eta_t=None,
     measurement: Optional[Union[MeasurementSpec, Callable[[np.ndarray], MeasurementSpec]]] = None,
@@ -135,7 +137,7 @@ def run_metropolis(
             y_t,
             y_tp1,
             eps_t,
-            registry,
+            registry, steady=steady , 
             y_tm1=y_tm1,
             eta_t=eta_t,
             measurement=meas,

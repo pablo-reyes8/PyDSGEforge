@@ -102,9 +102,10 @@ def run_map(
     equations,
     y_t,
     y_tp1,
-    eps_t,
+    eps_t , 
     registry: ParamRegistry,
     *,
+    steady = None,
     y_tm1=None,
     eta_t=None,
     measurement: Optional[Union[MeasurementSpec, Callable[[np.ndarray], MeasurementSpec]]] = None,
@@ -112,7 +113,7 @@ def run_map(
     method: str = "L-BFGS-B",
     hess_step: float = 1e-4,
     tau_scale: float = 0.5,
-    include_jacobian_prior: bool = False):
+    include_jacobian_prior: bool = False , div = 0):
 
     theta0 = np.asarray(theta0, dtype=float).reshape(-1)
     state_dim = len(y_t)
@@ -140,7 +141,7 @@ def run_map(
             y_tm1=y_tm1,
             eta_t=eta_t,
             measurement=meas,
-            div=0.0,
+            div=div, steady= steady , 
             include_jacobian=include_jacobian_prior)
 
     res = minimize(f_obj, theta0, method=method, bounds=bounds)

@@ -18,7 +18,7 @@ def st_sp(
     *,
     y_tm1=None,
     eta_t=None,
-    measurement=None,
+    measurement=None, steady = None , 
     div: float = 0.0,):
     
     theta_work = np.asarray(theta_work, dtype=float).reshape(-1)
@@ -39,7 +39,7 @@ def st_sp(
         y_tm1=y_tm1,
         eta_t=eta_t,
         param_values=registry,
-        measurement=meas_spec,)
+        measurement=meas_spec, steady_values=steady)
 
     G1, C, impact, eu = gensys(Gamma0, Gamma1, c, Psi, Pi, div=div)
     return G1, impact, eu, Psi0, Psi2
@@ -52,7 +52,7 @@ def log_like(
     registry: ParamRegistry,
     measurement = None,
     div: float = 0.0, y_tm1=None,
-    eta_t=None,
+    eta_t=None, steady = None , 
     precomputed: Optional[Tuple[np.ndarray, ...]] = None):
 
     """
@@ -78,7 +78,7 @@ def log_like(
             registry,
             y_tm1=y_tm1,
             eta_t=eta_t,
-            measurement=measurement,
+            measurement=measurement, steady=steady ,
             div=div,)
     else:
         Theta1, Theta0, eu, Psi0, Psi2 = precomputed

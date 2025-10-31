@@ -11,7 +11,7 @@ def log_posterior(
     eps_t,
     registry: ParamRegistry,
     *, y_tm1=None,
-    eta_t=None,
+    eta_t=None, steady = None, 
     measurement=None, div: float = 0.0, include_jacobian: bool = False):
 
     lp = registry.log_prior(theta_work, include_jacobian=include_jacobian)
@@ -30,7 +30,7 @@ def log_posterior(
         y_tm1=y_tm1,
         eta_t=eta_t,
         measurement=measurement,
-        div=div,)
+        div=div, steady= steady)
     
     if not np.isfinite(ll):
         return float("-inf")
@@ -46,7 +46,7 @@ def log_posterior2(
     y_tp1,
     eps_t,
     registry,
-    *,  y_tm1=None,
+    *,  y_tm1=None, steady=None , 
     eta_t=None, measurement=None,
     div: float = 0.0, include_jacobian: bool = False,):
 
@@ -62,4 +62,4 @@ def log_posterior2(
         eta_t=eta_t,
         measurement=measurement,
         div=div,
-        include_jacobian=include_jacobian)
+        include_jacobian=include_jacobian , steady= steady)
