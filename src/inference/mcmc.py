@@ -24,7 +24,7 @@ def metropolis_hastings(
     expand: float = 2.0,
     stuck_shrink: float = 0.1,
     min_scale: float = 1e-8,
-    max_scale: float = 1e8,):
+    max_scale: float = 1e8, log_every = 100):
 
     if rng is None:
         rng = np.random.default_rng()
@@ -77,7 +77,7 @@ def metropolis_hastings(
             elif rate_blk > high:
                 scale *= expand
             scale = float(np.clip(scale, min_scale, max_scale))
-            if logs:
+            if logs and (r + 1) % log_every == 0:
                 print(f"[adapt] it={r+1} rate={rate_blk:.3f} scale={scale:.3e}")
             accepts_blk = 0
 
