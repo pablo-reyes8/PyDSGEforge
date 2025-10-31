@@ -63,7 +63,8 @@ def tf_logistic(x: float):
     deben estar acotados entre 0 y 1.
     """
 
-    return float(np.exp(x) / (1.0 + np.exp(x))) 
+    # Use expit for numerical stability when x has large magnitude.
+    return float(np.expit(x))
 
 def tf_tanh01(x: float): 
     """
