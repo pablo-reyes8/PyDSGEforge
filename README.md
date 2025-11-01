@@ -142,24 +142,26 @@ model = DSGE(
 
 y_data = np.asarray(...)                 # e.g., dataframe_to_numpy(...)
 theta_guess = REG_NK.from_econ_dict({...})  # or pass a work-space vector directly
+bounds = list[(lower(int) , uper(int)) ... ] # list of tuples with the bounds for the MAP
 
 results = model.compute(
     registry=REG_NK,
-    theta_struct=theta_guess,
+    theta_struct=theta_econ,
     data=y_data,
     compute_steady=True,
     steady_cfg=SteadyConfig(max_iter=200, tol_f=1e-10),
     div=1.0 + 1e-6,
     map=True,
-    map_kwargs={"method": "L-BFGS-B"},
+    map_bounds=bounds,
+    map_kwargs={'method': 'trust-constr', 'hess_step': 0.0001,
+                 'tau_scale': 0.3,'include_jacobian_prior': False},
     run_mcmc=True,
     mcmc_draws=4000,
     mcmc_kwargs={
         "adapt": True,
         "warmup": 2000,
         "adapt_block": 100,
-        "logs": True},
-)
+        "logs": True , 'log_every':300})
 ```
 
 `compute(..., log_summary=True)` prints a short report with steady-state diagnostics, MAP values (work and economic space), and MCMC acceptance statistics. Disable the console output with `log_summary=False`. The returned dictionary provides structured access: `results["steady"]`, `results["map"]`, and `results["mcmc"]`.
