@@ -480,3 +480,72 @@ class DSGE:
                 "total_draws": total,
             }
         return None
+
+
+    def impulse_responses(
+        self,
+        draws_work: Optional[np.ndarray] = None,
+        *,
+        burn_in: Optional[int] = None,
+        horizon: int = 20,
+        quantiles: Sequence[float] = (0.16, 0.5, 0.84),
+        shock_indices: Optional[Sequence[int]] = None,
+        observable_names: Optional[Sequence[str]] = None,
+        shock_names: Optional[Sequence[str]] = None,
+        div: float = 0.0,
+        plot: bool = True,
+        plot_kwargs: Optional[Dict[str, Any]] = None,
+    ):
+        if self.registry is None:
+            raise RuntimeError("No hay registro asociado; ejecuta `compute` primero.")
+
+        if draws_work is None:
+            if self._mcmc_draws_full is None:
+                raise RuntimeError("No draws disponibles; provee `draws_work` o ejecuta MCMC.")
+            if burn_in is None:
+                draws = (
+                    self._mcmc_draws_after_burn
+                    if self._mcmc_draws_after_burn is not None
+                    else self._mcmc_draws_full)
+                
+            else:
+                if burn_in < 0 or burn_in >= self._mcmc_draws_full.shape[0]:
+                    raise ValueError("burn_in debe estar entre 0 y el número de draws almacenados.")
+                draws = self._mcmc_draws_full[burn_in:]
+        else:
+            draws = np.asarray(draws_work, dtype=float)
+            if draws.ndim != 2:
+                raise ValueError("`draws_work` debe ser una matriz (R x k).")
+            if burn_in is not None:
+                if burn_in < 0 or burn_in >= draws.shape[0]:
+                    raise ValueError("burn_in debe estar entre 0 y R-1.")
+                draws = draws[burn_in:]
+
+        if draws.size == 0:
+            raise ValueError("No hay draws disponibles después de aplicar el burn-in.")
+
+        irf_result = compute_irfs(
+            draws,
+            self.registry,
+            self._equations,
+            self._y_t,
+            self._y_tp1,
+            self._eps_t,
+            steady=self._steady_full,
+            y_tm1=self._y_tm1,
+            eta_t=self._eta_t,
+            measurement=self._measurement,
+            horizon=horizon,
+            burn_in=0,
+            quantiles=quantiles,
+            shock_indices=shock_indices,
+            observable_names=observable_names,
+            shock_names=shock_names,
+            div=div,
+        )
+
+        if plot:
+            plot_kwargs = plot_kwargs or {}
+            plot_irf_bands(irf_result, **plot_kwargs)
+
+        return irf_result
