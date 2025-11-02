@@ -1,30 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Callable, Dict, Iterable, Optional, Sequence, Tuple, Union, Any, Iterator
-from numpy.random import Generator
-
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import sympy as sp
-import re
 
-from src.analysis.impulse_responses import compute_irfs, plot_irf_bands
-from src.inference.likelihoods import log_like, st_sp
+from src.analysis.mcmc_diagnostics import plot_mcmc_diagnostics
 from src.inference.map import run_map
-from src.inference.mcmc import run_metropolis
-
-from src.model_builders.linear_system import (
-    build_matrices,
-    measurement_from_registry,
-    MeasurementSpec,)
-
+from src.inference.mcmc import run_metropolis, unpack_draws
+from src.model_builders.linear_system import MeasurementSpec
 from src.model_builders.steady import (
     SteadyConfig,
     complete_steady_values,
-    solve_steady)
-
-from src.solvers.gensys import gensys
+    solve_steady,
+)
 from src.specification.param_registry_class import ParamRegistry
 
 
@@ -66,22 +56,17 @@ def _escape_latex(text: str) -> str:
 
 
 class DSGE:
-    """
-    Cascarón inicial de la fachada `DSGE`. Por ahora sólo gestiona estructura
-    y métodos mágicos “quality of life” que no tenemos en Dynare.
-    """
-
     def __init__(
         self,
-        equations,
+        equations: Iterable[Union[sp.Equality, sp.Expr]],
         y_t: Sequence[sp.Symbol],
         *,
         y_tp1: Optional[Sequence[sp.Symbol]] = None,
         y_tm1: Optional[Sequence[sp.Symbol]] = None,
         eps_t: Optional[Sequence[sp.Symbol]] = None,
         eta_t: Optional[Sequence[sp.Symbol]] = None,
-        metadata: Optional[dict] = None,):
-        
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
         self._equations = tuple(equations)
         self._y_t = tuple(y_t)
         self._y_tp1 = tuple(y_tp1 or ())
@@ -89,79 +74,88 @@ class DSGE:
         self._eps_t = tuple(eps_t or ())
         self._eta_t = tuple(eta_t or ())
         self._metadata = dict(metadata or {})
-        self._measurement = None
+        self._measurement: Optional[
+            Union[
+                MeasurementSpec,
+                Callable[[np.ndarray], MeasurementSpec],
+            ]
+        ] = None
 
         self.signature = ModelSignature(
             n_equations=len(self._equations),
             n_states=len(self._y_t),
             n_leads=len(self._y_tp1),
             n_lags=len(self._y_tm1),
-            n_shocks=len(self._eps_t),)
+            n_shocks=len(self._eps_t),
+        )
 
+        self.registry: Optional[ParamRegistry] = None
+        self.theta_work: Optional[np.ndarray] = None
+        self.theta_econ: Optional[Dict[str, float]] = None
+        self._steady_values: Optional[Dict[str, Any]] = None
+        self.map_result: Optional[Dict[str, Any]] = None
+        self.mcmc_result: Optional[Dict[str, Any]] = None
+        self._mcmc_draws_full: Optional[np.ndarray] = None
+        self._mcmc_draws_after_burn: Optional[np.ndarray] = None
+        self._mcmc_default_burn: int = 0
+
+    # ------------------------------------------------------------------
+    # Python niceties
+    # ------------------------------------------------------------------
 
     def __len__(self) -> int:
-        """Número de ecuaciones del modelo."""
         return len(self._equations)
 
-    def __iter__(self):
-        """Permite iterar directamente sobre las ecuaciones."""
+    def __iter__(self) -> Iterator[Union[sp.Equality, sp.Expr]]:
         return iter(self._equations)
 
-    def __getitem__(self, idx: Union[int, str]):
-        """
-        Acceso indexado:
-        - `model[i]` devuelve la i-ésima ecuación.
-        - `model['pi_t']` busca una ecuación cuyo lhs contenga ese símbolo.
-        """
+    def __getitem__(self, idx: Union[int, str]) -> Union[sp.Equality, sp.Expr]:
         if isinstance(idx, int):
             return self._equations[idx]
-        if isinstance(idx, str):
-            target = sp.Symbol(idx)
-            for eq in self._equations:
-                if isinstance(eq, sp.Equality):
-                    lhs = eq.lhs
-                else:
-                    lhs = eq
-                if target in lhs.free_symbols:
-                    return eq
-            raise KeyError(f"No equation found involving symbol '{idx}'")
-        raise TypeError("DSGE indices must be ints or str names")
+        target = sp.Symbol(idx)
+        for eq in self._equations:
+            lhs = eq.lhs if isinstance(eq, sp.Equality) else eq
+            if target in lhs.free_symbols:
+                return eq
+        raise KeyError(f"No equation found involving symbol '{idx}'")
 
-    def __contains__(self, item) -> bool:
-        """
-        - SymPy equation/residual: busca coincidencia exacta.
-        - Symbol/str: verifica si aparece en alguna ecuación.
-        """
+    def __contains__(self, item: Union[sp.Symbol, str, sp.Expr, sp.Equality]) -> bool:
         if isinstance(item, (sp.Expr, sp.Equality)):
             return item in self._equations
-        if isinstance(item, sp.Symbol):
-            return any(item in eq.free_symbols for eq in self._equations)
-        if isinstance(item, str):
-            sym = sp.Symbol(item)
-            return sym in self
-        return False
+        sym = sp.Symbol(item) if isinstance(item, str) else item
+        return any(sym in (eq.lhs if isinstance(eq, sp.Equality) else eq).free_symbols for eq in self._equations)
 
     def __repr__(self) -> str:
-        """Resumen compacto, útil para logs y debugging."""
         meta = ""
         if self._metadata:
             meta = " | " + ", ".join(f"{k}={v}" for k, v in self._metadata.items())
         return f"<DSGE {self.signature}{meta}>"
 
     def __str__(self) -> str:
-        """Salida legible en texto plano (buena para consola/logs)."""
         header = repr(self)
         lines = []
         for idx, eq in enumerate(self._equations, start=1):
             if isinstance(eq, sp.Equality):
-                lhs = sp.sstr(eq.lhs)
-                rhs = sp.sstr(eq.rhs)
+                lhs, rhs = sp.sstr(eq.lhs), sp.sstr(eq.rhs)
                 lines.append(f"[{idx}] {lhs} = {rhs}")
             else:
-                residual = sp.sstr(eq)
-                lines.append(f"[{idx}] {residual} = 0")
+                lines.append(f"[{idx}] {sp.sstr(eq)} = 0")
         return header + "\n" + "\n".join(lines)
-    
+
+    def summary(self) -> str:
+        parts = [
+            f"equations={len(self._equations)}",
+            f"states={len(self._y_t)}",
+            f"leads={len(self._y_tp1)}",
+            f"lags={len(self._y_tm1)}",
+            f"shocks={len(self._eps_t)}",
+        ]
+        if self.registry is not None:
+            parts.append(f"params={len(self.registry.params)}")
+        if self._metadata:
+            parts.append("meta=" + ", ".join(f"{k}={v}" for k, v in self._metadata.items()))
+        return "DSGE(" + "; ".join(parts) + ")"
+
     def _repr_latex_(self) -> str:
 
         def _esc(x):
@@ -201,27 +195,10 @@ class DSGE:
             + r"\end{aligned}")
         return latex
 
-    def __hash__(self) -> int:
-        """
-        Nos permite usar el modelo como clave de diccionarios (cache) siempre
-        que esté congelado simbólicamente.
-        """
-        return hash((self._equations, self._y_t, self._y_tp1, self._y_tm1, self._eps_t))
 
-
-    def summary(self):
-        """Versión textual más corta que __str__ (sin ecuaciones)."""
-        meta = ""
-        if self._metadata:
-            meta = " | " + ", ".join(f"{k}={v}" for k, v in self._metadata.items())
-        return f"DSGE({self.signature}){meta}"
-
-    def symbols(self):
-        """Devuelve el conjunto de símbolos de estado (orden canónico)."""
-        return self._y_t
-    
-
-    ######## DGSE INFERENCE ############
+    # ------------------------------------------------------------------
+    # Core pipeline
+    # ------------------------------------------------------------------
 
     def compute(
         self,
@@ -233,8 +210,8 @@ class DSGE:
         steady_cfg: Optional[SteadyConfig] = None,
         steady_guess: Optional[Dict[sp.Symbol, float]] = None,
         measurement: Optional[
-            Union[MeasurementSpec, Callable[[np.ndarray], MeasurementSpec]]] = None,
-            
+            Union[MeasurementSpec, Callable[[np.ndarray], MeasurementSpec]]
+        ] = None,
         div: float = 1.0 + 1e-6,
         map: bool = True,
         map_bounds: Optional[Sequence[Tuple[float, float]]] = None,
@@ -246,8 +223,8 @@ class DSGE:
         mcmc_start: Optional[Sequence[float]] = None,
         mcmc_rng: Optional[np.random.Generator] = None,
         mcmc_kwargs: Optional[Dict[str, Any]] = None,
-        log_summary: bool = True) -> Dict[str, Any]:
-        
+        log_summary: bool = False,
+    ) -> Dict[str, Any]:
         if isinstance(theta_struct, dict):
             theta_econ = dict(theta_struct)
             theta_work = registry.from_econ_dict(theta_econ)
@@ -255,10 +232,9 @@ class DSGE:
             theta_work = np.asarray(theta_struct, dtype=float).reshape(-1)
             if theta_work.size != len(registry.params):
                 raise ValueError(
-                    f"theta tiene longitud {theta_work.size}; "
-                    f"se esperaban {len(registry.params)}.")
+                    f"theta tiene longitud {theta_work.size}; se esperaban {len(registry.params)}."
+                )
             theta_econ = registry.to_econ_dict(theta_work)
-
 
         self.registry = registry
         self.theta_work = theta_work
@@ -267,9 +243,7 @@ class DSGE:
         if measurement is not None:
             self._measurement = measurement
 
-        # Steady opcional 
         steady_full = None
-
         if compute_steady:
             steady_core, report = solve_steady(
                 equations=self._equations,
@@ -280,30 +254,37 @@ class DSGE:
                 eta_t=self._eta_t,
                 param_values=registry.to_sympy_subs(theta_work),
                 init_guess=steady_guess,
-                cfg=steady_cfg)
-
+                cfg=steady_cfg,
+            )
             self._steady_values = {"values": steady_core, "report": report}
-
             steady_full = complete_steady_values(
                 steady_core,
                 self._y_t,
                 y_tp1=self._y_tp1,
                 y_tm1=self._y_tm1,
                 eps_t=self._eps_t,
-                eta_t=self._eta_t,)
+                eta_t=self._eta_t,
+            )
         else:
             self._steady_values = None
 
-        #  MAP opcional 
-        map_result = None
+        map_info = None
         if map:
             theta0 = (
                 np.asarray(map_start, dtype=float).reshape(-1)
                 if map_start is not None
-                else theta_work)
-            
-            kwargs_map = dict(map_kwargs or {})
-            map_result = run_map(
+                else theta_work
+            )
+            map_kwargs = dict(map_kwargs or {})
+            allowed_map_keys = {
+                "method",
+                "hess_step",
+                "tau_scale",
+                "include_jacobian_prior",
+            }
+            filtered_map_kwargs = {k: v for k, v in map_kwargs.items() if k in allowed_map_keys}
+
+            map_info = run_map(
                 theta0=theta0,
                 y=data,
                 equations=self._equations,
@@ -317,23 +298,33 @@ class DSGE:
                 steady=steady_full,
                 bounds=map_bounds,
                 div=div,
-                **{k: v for k, v in kwargs_map.items()
-                if k in {"method", "hess_step", "tau_scale", "include_jacobian_prior"}})
+                **filtered_map_kwargs)
             
-        self.map_result = map_result
+        self.map_result = map_info
 
-        #  Metropolis
-        mcmc_result = None
+        if map_info != None: 
+            print("MAP success:", self.map_result["success"], self.map_result["message"])
+            print("MAP optimization Complete: Starting Metropolis Hastings")
+            print()
+        else:
+            pass
+
+        self._mcmc_draws_full = None
+        self._mcmc_draws_after_burn = None
+        self._mcmc_default_burn = 0
+
+        
+        mcmc_info = None
         if run_mcmc:
-            if map_result is not None:
-                theta_start = map_result["theta_map"]
-                cov_prop = map_result.get("cov_proposal")
+            if map_info is not None:
+                theta_start = map_info["theta_map"]
+                cov_prop = map_info.get("cov_proposal")
             else:
                 theta_start = (
                     np.asarray(mcmc_start, dtype=float).reshape(-1)
                     if mcmc_start is not None
-                    else theta_work)
-                
+                    else theta_work
+                )
                 cov_prop = None
 
             if mcmc_cov is not None:
@@ -342,9 +333,24 @@ class DSGE:
                 cov_prop = np.eye(theta_work.size) * 1e-3
 
             rng = mcmc_rng or np.random.default_rng()
-            kwargs_mcmc = dict(mcmc_kwargs or {})
+            mcmc_kwargs = dict(mcmc_kwargs or {})
+            allowed_mcmc = {
+                "adapt",
+                "warmup",
+                "adapt_block",
+                "low",
+                "high",
+                "shrink",
+                "expand",
+                "stuck_shrink",
+                "min_scale",
+                "max_scale",
+                "logs",
+                "log_every",
+            }
+            filtered_mcmc = {k: v for k, v in mcmc_kwargs.items() if k in allowed_mcmc}
 
-            mcmc_result = run_metropolis(
+            mcmc_info = run_metropolis(
                 theta_start=theta_start,
                 y=data,
                 equations=self._equations,
@@ -360,58 +366,117 @@ class DSGE:
                 div=div,
                 R=mcmc_draws,
                 rng=rng,
-                **{k: v for k, v in kwargs_mcmc.items()
-                if k in {"adapt", "warmup", "adapt_block", "low", "high",
-                            "shrink", "expand", "stuck_shrink", "min_scale",
-                            "max_scale", "logs"}},)
-            
-        self.mcmc_result = mcmc_result
+                **filtered_mcmc,
+            )
+
+            draws_full = np.asarray(mcmc_info.get("draws", np.empty((0, 0))), dtype=float)
+            default_burn = int(mcmc_kwargs.get("warmup", 0) or 0)
+            if draws_full.size:
+                default_burn = max(0, min(default_burn, draws_full.shape[0]))
+                draws_after = draws_full[default_burn:] if default_burn else draws_full
+            else:
+                default_burn = 0
+                draws_after = draws_full
+
+            mcmc_info["draws_full"] = draws_full
+            mcmc_info["draws_after_burn"] = draws_after
+            mcmc_info["burn_in"] = default_burn
+
+            self._mcmc_draws_full = draws_full
+            self._mcmc_draws_after_burn = draws_after
+            self._mcmc_default_burn = default_burn
+
+        self.mcmc_result = mcmc_info
 
         if log_summary:
             print("\n[DSGE.compute] summary")
-
             if self._steady_values is not None:
-                steady_vals = self._steady_values.get("values", {})
-                if steady_vals:
+                values = self._steady_values.get("values", {})
+                if values:
                     print("  Steady state values:")
-                    for sym, val in steady_vals.items():
+                    for sym, val in values.items():
                         print(f"    - {sym}: {val:.6g}")
-                report = self._steady_values.get("report", {})
-                if report:
-                    parts = []
-                    if report.get("method"):
-                        parts.append(f"method={report['method']}")
-                    if report.get("it") is not None:
-                        parts.append(f"it={report['it']}")
-                    if report.get("f_norm") is not None:
-                        parts.append(f"||F||_inf={report['f_norm']:.3e}")
-                    if parts:
-                        print(f"  Steady solver info: {', '.join(parts)}")
-
-            if map_result is not None:
-                theta_map = np.asarray(map_result.get("theta_map", ()), dtype=float)
-                print("  MAP theta (work):", np.array2string(theta_map, precision=6, suppress_small=True))
-                if map_result.get("neglogpost_map") is not None:
-                    print(f"  MAP neg-log posterior: {map_result['neglogpost_map']:.6f}")
-                if theta_map.size:
-                    theta_map_econ = registry.to_econ_dict(theta_map)
-                    if theta_map_econ:
-                        print("  MAP theta (econ):")
-                        for name, val in theta_map_econ.items():
-                            print(f"    - {name}: {val:.6g}")
-            else:
-                print("  MAP stage: not executed.")
-
-            if mcmc_result is not None:
-                acc = mcmc_result.get("acceptance_rate")
-                draws = mcmc_result.get("draws")
-                total_draws = draws.shape[0] if isinstance(draws, np.ndarray) else mcmc_draws
+            if map_info is not None:
+                print("  MAP success:", map_info.get("success"), map_info.get("message"))
+            if mcmc_info is not None:
+                acc = mcmc_info.get("acceptance_rate")
                 if acc is not None:
-                    print(f"  MCMC acceptance rate: {acc:.3f} ({int(round(acc * total_draws))}/{total_draws})")
-            elif run_mcmc:
-                print("  MCMC stage requested but no result returned.")
+                    total = mcmc_info.get("draws", np.empty((0, 0))).shape[0]
+                    print(f"  MCMC acceptance rate: {acc:.3f} ({int(round(acc * total))}/{total})")
 
         return {
             "steady": self._steady_values,
             "map": self.map_result,
-            "mcmc": self.mcmc_result}
+            "mcmc": self.mcmc_result,
+        }
+
+    # ------------------------------------------------------------------
+    # Posterior analysis
+    # ------------------------------------------------------------------
+
+    def analyze_posteriors(
+        self,
+        subset: Optional[Union[int, Sequence[str]]] = None,
+        *,
+        burn_in: Optional[int] = None,
+        use_full_chain: bool = False,
+        bins: int = 20,
+        figsize: Tuple[float, float] = (10, 4),
+        plot: bool = True,
+        describe: bool = True,
+        return_data: bool = False,
+    ):
+        registry = getattr(self, "registry", None)
+        if registry is None:
+            raise RuntimeError("No hay registro asociado; ejecuta `compute` primero.")
+
+        if self.mcmc_result is None or self._mcmc_draws_full is None:
+            raise RuntimeError("No se encontró resultado MCMC; ejecuta `compute(..., run_mcmc=True)`.")
+
+        draws_full = self._mcmc_draws_full
+        default_burn = self._mcmc_default_burn if not use_full_chain else 0
+        effective_burn = default_burn if burn_in is None else int(burn_in)
+        if effective_burn < 0 or effective_burn >= draws_full.shape[0]:
+            raise ValueError("burn_in debe ser un entero entre 0 y R-1.")
+
+        draws_work = draws_full[effective_burn:] if effective_burn else draws_full
+        kept = draws_work.shape[0]
+        total = draws_full.shape[0]
+
+        draws_econ = unpack_draws(draws_work, registry)
+
+        if plot:
+            subset_for_plot: Union[int, Sequence[str]]
+            subset_for_plot = min(4, draws_work.shape[1]) if subset is None else subset
+            plot_mcmc_diagnostics(
+                draws_work,
+                registry,
+                subset_for_plot,
+                bins=bins,
+                burn_in=0,
+                figsize=figsize,
+            )
+
+        summary = None
+        if describe:
+            summary = draws_econ.describe().T
+            cols = [c for c in ["mean", "std", "25%", "50%", "75%"] if c in summary.columns]
+            summary_to_print = summary[cols] if cols else summary
+
+            acc = self.mcmc_result.get("acceptance_rate")
+            acc_msg = f"{acc:.3f}" if acc is not None else "n/d"
+            print(
+                f"\nPosterior (espacio económico)"
+                f" | draws usados: {kept}/{total} (burn-in={effective_burn})"
+                f" | tasa de aceptación: {acc_msg}"
+            )
+            print(summary_to_print.to_string(float_format=lambda x: f"{x:0.4g}"))
+
+        if return_data:
+            return {
+                "draws_econ": draws_econ,
+                "summary": summary,
+                "burn_in": effective_burn,
+                "total_draws": total,
+            }
+        return None
