@@ -225,6 +225,7 @@ class DSGE:
         mcmc_kwargs: Optional[Dict[str, Any]] = None,
         log_summary: bool = False,
     ) -> Dict[str, Any]:
+        
         if isinstance(theta_struct, dict):
             theta_econ = dict(theta_struct)
             theta_work = registry.from_econ_dict(theta_econ)
@@ -407,8 +408,134 @@ class DSGE:
         return {
             "steady": self._steady_values,
             "map": self.map_result,
-            "mcmc": self.mcmc_result,
-        }
+            "mcmc": self.mcmc_result}
+        
+
+    def prior(self,
+        registry: Optional[ParamRegistry] = None,
+        *,
+        include: Optional[Sequence[str]] = None,
+        exclude: Optional[Sequence[str]] = None,
+        quantile_bounds: Tuple[float, float] = (0.01, 0.99),
+        grid_points: int = 400,
+        figsize: Tuple[float, float] = (10, 6),
+        sharey: bool = False,
+        title: Optional[str] = None):
+            
+        """
+        Grafica las densidades de las priors en el espacio económico.
+
+        Este método puede llamarse antes de ejecutar `compute`, siempre
+        que se provea explícitamente un `ParamRegistry`.
+        """
+
+        reg = registry or self.registry
+        if reg is None:
+            raise RuntimeError(
+                "No hay ParamRegistry asociado. Pasa uno mediante `registry=` "
+                "o ejecuta primero `compute(...)`.")
+
+        try:
+            import matplotlib.pyplot as plt  
+            from scipy.stats import (
+                gamma as stats_gamma,
+                invgamma as stats_invgamma,
+                norm as stats_norm,
+                uniform as stats_uniform)
+        except ImportError as exc:
+            raise ImportError(
+                "Se requieren matplotlib y scipy para graficar priors."
+            ) from exc
+
+        lo_q, hi_q = quantile_bounds
+        if not (0.0 < lo_q < hi_q < 1.0):
+            raise ValueError("quantile_bounds debe cumplir 0 < lo < hi < 1.")
+
+        include_set = set(include or [])
+        exclude_set = set(exclude or [])
+
+        specs = [
+            p for p in reg.params
+            if p.prior is not None
+            and (not include_set or p.name in include_set)
+            and (p.name not in exclude_set)]
+
+        if not specs:
+            raise ValueError(
+                "No hay parámetros con prior para graficar "
+                "(revisa include/exclude).")
+
+        def _make_dist(prior_spec):
+            fam = prior_spec.family.lower()
+            params = prior_spec.params
+
+            if fam == "gamma":
+                return stats_gamma(a=params["a"], scale=params["scale"]), (0.0, np.inf)
+            if fam == "invgamma":
+                return stats_invgamma(a=params["a"], scale=params["scale"]), (0.0, np.inf)
+            if fam == "normal":
+                return stats_norm(loc=params["loc"], scale=params["scale"]), (-np.inf, np.inf)
+            if fam == "uniform":
+                loc = params.get("loc", 0.0)
+                scale = params.get("scale", 1.0)
+                return stats_uniform(loc=loc, scale=scale), (loc, loc + scale)
+            raise ValueError(f"Familia de prior no soportada: {prior_spec.family}")
+
+        n_plots = len(specs)
+        n_cols = min(3, n_plots)
+        n_rows = int(np.ceil(n_plots / n_cols))
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize, sharey=sharey)
+        axes = np.atleast_1d(axes).ravel()
+
+        for ax, spec in zip(axes, specs):
+            prior_spec = spec.prior
+            dist, support = _make_dist(prior_spec)
+            q_low, q_high = dist.ppf([lo_q, hi_q])
+
+            if (not np.isfinite(q_low) or not np.isfinite(q_high)
+                    or q_low == q_high):
+                mean = dist.mean()
+                std = dist.std()
+                if np.isfinite(mean) and np.isfinite(std) and std > 0:
+                    q_low = mean - 4 * std
+                    q_high = mean + 4 * std
+                else:
+                    q_low, q_high = support
+
+            lower_support, upper_support = support
+            if np.isfinite(lower_support):
+                q_low = max(q_low, lower_support + 1e-8)
+            if np.isfinite(upper_support):
+                q_high = min(q_high, upper_support - 1e-8)
+
+            if not np.isfinite(q_low):
+                q_low = lower_support if np.isfinite(lower_support) else -10.0
+            if not np.isfinite(q_high):
+                q_high = upper_support if np.isfinite(upper_support) else 10.0
+
+            if q_high <= q_low:
+                q_high = q_low + 1.0
+
+            grid = np.linspace(q_low, q_high, grid_points)
+            logpdf_vals = np.array([prior_spec.logpdf(val) for val in grid])
+            pdf_vals = np.exp(logpdf_vals)
+            pdf_vals[~np.isfinite(pdf_vals)] = np.nan
+
+            ax.plot(grid, pdf_vals, color="#1565C0", lw=1.8)
+            ax.set_title(f"{spec.name} ({prior_spec.family})")
+            ax.set_xlabel("Valor económico")
+            ax.set_ylabel("densidad")
+            ax.grid(alpha=0.15)
+
+        for ax in axes[n_plots:]:
+            ax.axis("off")
+
+        if title:
+            fig.suptitle(title)
+
+        fig.tight_layout()
+        return fig, axes.reshape(n_rows, n_cols)
+
 
     # ------------------------------------------------------------------
     # Posterior analysis
