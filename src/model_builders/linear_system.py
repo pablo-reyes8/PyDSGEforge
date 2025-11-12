@@ -119,8 +119,8 @@ def build_matrices(
     Gamma0  = _to_float_array(_subs_numeric(G0_sym, subs))
     Gamma_lead = _to_float_array(_subs_numeric(Glead_sym, subs))
     Gamma_lag  = _to_float_array(_subs_numeric(Glag_sym, subs))
-    Psi  = _to_float_array(_subs_numeric(Psi_sym, subs))
-    Pi  = _to_float_array(_subs_numeric(Pi_sym, subs))
+    Psi  = -_to_float_array(_subs_numeric(Psi_sym, subs))
+    Pi  = -_to_float_array(_subs_numeric(Pi_sym, subs))
     c   = _to_float_array((-f).subs(subs)).reshape(-1)
 
     meas = measurement or MeasurementSpec()
@@ -161,7 +161,7 @@ def build_matrices(
                 base = str(lag_sym).replace("tm1", "t").replace("_t1", "_t")
                 if base not in name_to_idx:
                     raise ValueError(f"No puedo mapear la variable rezagada {lag_sym}.")
-                Gamma1_top[:, name_to_idx[base]] = Gamma_lag[:, col]
+                Gamma1_top[:, name_to_idx[base]] = -Gamma_lag[:, col]
         Gamma1_bot = np.zeros((m, n + m), dtype=np.float64)
         Gamma1_aug = np.vstack([Gamma1_top, Gamma1_bot])
 
@@ -181,7 +181,7 @@ def build_matrices(
                 base = str(lag_sym).replace("tm1", "t").replace("_t1", "_t")
                 if base not in name_to_idx:
                     raise ValueError(f"No puedo mapear la variable rezagada {lag_sym}.")
-                Gamma1[:, name_to_idx[base]] = Gamma_lag[:, col]
+                Gamma1[:, name_to_idx[base]] = -Gamma_lag[:, col]
         return Gamma0, Gamma1, Psi, Pi, Psi0, Psi2, c
 
 
