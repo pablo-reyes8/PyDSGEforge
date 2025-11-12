@@ -105,6 +105,7 @@ def metropolis_hastings(
     return draws, accepts / R
 
 
+
 def run_metropolis(
     theta_start: Sequence[float],
     y: np.ndarray,
@@ -124,6 +125,7 @@ def run_metropolis(
     rng: Optional[np.random.Generator] = None,
     adapt: bool = False,
     logs: bool = False,
+    include_jacobian: bool = False,
     **adapt_kwargs,):
 
     if rng is None:
@@ -159,7 +161,7 @@ def run_metropolis(
             eta_t=eta_t,
             measurement=meas,
             div=div,
-            include_jacobian=False,)
+            include_jacobian=include_jacobian,)
 
     draws, acc_rate = metropolis_hastings(
         log_post,
@@ -190,5 +192,4 @@ def unpack_draws(draws: np.ndarray, registry: ParamRegistry, names: Optional[Seq
     df = pd.DataFrame.from_records(records)
     if names is not None:
         df = df.loc[:, names]
-
     return df
