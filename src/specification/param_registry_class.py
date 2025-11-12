@@ -370,3 +370,46 @@ class ParamRegistry:
                 raise KeyError(f"Falta valor económico para {p.name}")
             theta.append(p.inv(econ[p.name]))
         return np.asarray(theta, dtype=float)
+
+    def suggest_work_bounds(
+        self,
+        *,
+        logistic_tol: float = 1e-6,
+        exp_min: float = 1e-6,
+        exp_max: float = 100.0) -> List[Tuple[float, float]]:
+        """
+        Genera bounds heurísticos en el espacio de trabajo.
+
+        - Para transformaciones logísticas/tanh01 → evita acercarse a 0/1.
+        - Para transformaciones exponenciales → asegura positividad
+          con un mínimo configurable y opcionalmente un máximo.
+        - Para transformaciones identidad → usa límites de `meta` si existen.
+        """
+
+        bounds: List[Tuple[float, float]] = []
+        for spec in self.params:
+            meta = spec.meta or {}
+            transform = spec.transform.lower()
+
+            if transform in {"logistic", "tanh01"}:
+                lower_econ = meta.get("lower", logistic_tol)
+                upper_econ = meta.get("upper", 1.0 - logistic_tol)
+                lower = spec.inv(lower_econ)
+                upper = spec.inv(upper_econ)
+
+            elif transform == "exp":
+                lower_econ = max(exp_min, meta.get("lower", exp_min))
+                upper_econ = meta.get("upper")
+                lower = spec.inv(lower_econ)
+                if upper_econ is None:
+                    upper = np.inf
+                else:
+                    upper = spec.inv(max(upper_econ, lower_econ * (1.0 + 1e-6)))
+
+            else:  # identidad u otras sin restricciones explícitas
+                lower = meta.get("lower", -np.inf)
+                upper = meta.get("upper", np.inf)
+
+            bounds.append((float(lower), float(upper)))
+
+        return bounds
