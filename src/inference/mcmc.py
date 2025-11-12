@@ -24,8 +24,8 @@ def metropolis_hastings(
     expand: float = 2.0,
     stuck_shrink: float = 0.1,
     min_scale: float = 1e-8,
-    max_scale: float = 1e8, log_every = 100):
-
+    max_scale: float = 1e8,
+    log_every: int = 100):
     if rng is None:
         rng = np.random.default_rng()
 
@@ -52,40 +52,57 @@ def metropolis_hastings(
         raise ValueError("El estado inicial debe tener log-posterior finito.")
 
     accepts = 0
-    accepts_blk = 0
+    accepts_blk = 0  
+    inf_blk_iter = 0
+    inf_blk_accepts = 0
 
     for r in range(R):
         theta_prop = theta + L_eff() @ rng.standard_normal(d)
         logpost_prop = float(log_posterior(theta_prop, y))
 
+        accepted = False
         if np.isfinite(logpost_prop):
             log_alpha = logpost_prop - logpost_curr
             if log_alpha >= 0.0 or np.log(rng.random()) < log_alpha:
                 theta = theta_prop
                 logpost_curr = logpost_prop
                 accepts += 1
-                accepts_blk += 1
+                accepted = True
 
         draws[r] = theta
 
-        if adapt and r < warmup and (r + 1) % adapt_block == 0:
-            rate_blk = accepts_blk / adapt_block
-            if accepts_blk == 0:
-                scale *= stuck_shrink
-            elif rate_blk < low:
-                scale *= shrink
-            elif rate_blk > high:
-                scale *= expand
-            scale = float(np.clip(scale, min_scale, max_scale))
-            if logs and (r + 1) % log_every == 0:
-                print(f"[adapt] it={r+1} rate={rate_blk:.3f} scale={scale:.3e}")
-            accepts_blk = 0
+        if r < warmup:
+            accepts_blk += int(accepted)
+
+            if adapt and (r + 1) % adapt_block == 0:
+                rate_blk = accepts_blk / adapt_block
+                if accepts_blk == 0:
+                    scale *= stuck_shrink
+                elif rate_blk < low:
+                    scale *= shrink
+                elif rate_blk > high:
+                    scale *= expand
+
+                scale = float(np.clip(scale, min_scale, max_scale))
+
+                if logs and (r + 1) % log_every == 0:
+                    print(f"[adapt] it={r+1} rate={rate_blk:.3f} scale={scale:.3e}")
+
+                accepts_blk = 0  
+        else:
+            inf_blk_iter += 1
+            inf_blk_accepts += int(accepted)
+
+            if logs and (inf_blk_iter % log_every == 0):
+                rate_inf = inf_blk_accepts / max(1, inf_blk_iter)
+                print(f"[Inference] it={r+1} rate={rate_inf:.3f} scale={scale:.3e}")
+                inf_blk_iter = 0
+                inf_blk_accepts = 0
 
     if logs:
         print(f"[Metropolis] acceptance rate: {accepts/R:.3f} ({accepts}/{R}) scale={scale:.3e}")
 
     return draws, accepts / R
-
 
 
 def run_metropolis(
@@ -173,4 +190,5 @@ def unpack_draws(draws: np.ndarray, registry: ParamRegistry, names: Optional[Seq
     df = pd.DataFrame.from_records(records)
     if names is not None:
         df = df.loc[:, names]
+
     return df
