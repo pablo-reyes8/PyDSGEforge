@@ -53,7 +53,8 @@ def log_like(
     measurement = None,
     div: float = 0.0, y_tm1=None,
     eta_t=None, steady = None , 
-    precomputed: Optional[Tuple[np.ndarray, ...]] = None):
+    precomputed: Optional[Tuple[np.ndarray, ...]] = None,
+    diffuse_scale: float = 1e6):
 
     """
     Log-verosimilitud Gaussian Kalman filter:
@@ -95,7 +96,7 @@ def log_like(
     H = registry.build_H(theta_work, n_y=n_y)
 
     s_bar = np.zeros(n_s)
-    P_bar = np.eye(n_s)
+    P_bar = diffuse_scale * np.eye(n_s)
 
     const = n_y * np.log(2.0 * np.pi)
     ll_sum = 0.0
