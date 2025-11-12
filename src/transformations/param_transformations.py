@@ -1,5 +1,16 @@
 import numpy as np 
 
+def _maybe_array(result):
+    """
+    Converts 0-d arrays back to Python floats while keeping higher
+    dimensional arrays intact (useful for vectorized transforms).
+    """
+    if np.isscalar(result):
+        return float(result)
+    arr = np.asarray(result)
+    return float(arr) if arr.ndim == 0 else arr
+
+
 def tf_id(x: float):
     """
     Identidad: deja el parámetro sin transformar.
@@ -19,7 +30,7 @@ def tf_id(x: float):
     Esta transformación se usa para parámetros sin restricciones,
     como coeficientes que pueden tomar cualquier valor real.
     """
-    return float(x)
+    return _maybe_array(np.asarray(x, dtype=float))
 
 def tf_exp(x: float):
     """
@@ -41,7 +52,7 @@ def tf_exp(x: float):
     coeficientes que deben ser estrictamente positivos.
     """
 
-    return float(np.exp(x))
+    return _maybe_array(np.exp(np.asarray(x, dtype=float)))
 
 def tf_logistic(x: float):
     """
@@ -63,8 +74,21 @@ def tf_logistic(x: float):
     deben estar acotados entre 0 y 1.
     """
 
-    # Use expit for numerical stability when x has large magnitude.
-    return float(np.expit(x))
+    x_arr = np.asarray(x, dtype=float)
+    if x_arr.ndim == 0:
+        x_val = float(x_arr)
+        if x_val >= 0:
+            z = np.exp(-x_val)
+            return float(1.0 / (1.0 + z))
+        z = np.exp(x_val)
+        return float(z / (1.0 + z))
+
+    result = np.empty_like(x_arr, dtype=float)
+    mask = x_arr >= 0
+    result[mask] = 1.0 / (1.0 + np.exp(-x_arr[mask]))
+    exp_pos = np.exp(x_arr[~mask])
+    result[~mask] = exp_pos / (1.0 + exp_pos)
+    return result
 
 def tf_tanh01(x: float): 
     """
@@ -87,7 +111,7 @@ def tf_tanh01(x: float):
     una transformación más simétrica o derivadas más estables.
     """
 
-    return float(0.5 * (np.tanh(x) + 1.0))       
+    return _maybe_array(0.5 * (np.tanh(np.asarray(x, dtype=float)) + 1.0))
 
 def inv_id(y: float): 
     """
