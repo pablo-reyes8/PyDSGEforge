@@ -19,7 +19,6 @@ from src.model_builders.steady import (
 from src.specification.param_registry_class import ParamRegistry
 
 
-
 @dataclass(frozen=True)
 class ModelSignature:
     """
@@ -205,6 +204,7 @@ class DSGE:
         registry: ParamRegistry,
         theta_struct: Union[Sequence[float], Dict[str, float]],
         *,
+        include_jacobian_prior: bool = False,
         data: np.ndarray,
         compute_steady: bool = True,
         steady_cfg: Optional[SteadyConfig] = None,
@@ -239,6 +239,7 @@ class DSGE:
         self.registry = registry
         self.theta_work = theta_work
         self.theta_econ = theta_econ
+        self._include_jacobian_prior = bool(include_jacobian_prior)
 
         if measurement is not None:
             self._measurement = measurement
@@ -272,17 +273,20 @@ class DSGE:
             steady_full = None
 
         map_info = None
+        map_kwargs = dict(map_kwargs or {})
+        map_include_jac = bool(map_kwargs.pop("include_jacobian_prior", include_jacobian_prior))
+        if map_bounds == "auto":
+            map_bounds = registry.suggest_work_bounds()
+
         if map:
             theta0 = (
                 np.asarray(map_start, dtype=float).reshape(-1)
                 if map_start is not None else theta_work)
-            
-            map_kwargs = dict(map_kwargs or {})
+
             allowed_map_keys = {
                 "method",
                 "hess_step",
-                "tau_scale",
-                "include_jacobian_prior",}
+                "tau_scale",}
             
             filtered_map_kwargs = {k: v for k, v in map_kwargs.items() if k in allowed_map_keys}
 
@@ -300,6 +304,7 @@ class DSGE:
                 steady=steady_full,
                 bounds=map_bounds,
                 div=div,
+                include_jacobian_prior=map_include_jac,
                 **filtered_map_kwargs)
             
         self.map_result = map_info
@@ -316,6 +321,9 @@ class DSGE:
         self._mcmc_default_burn = 0
 
         
+        mcmc_kwargs = dict(mcmc_kwargs or {})
+        mcmc_include_jac = bool(mcmc_kwargs.pop("include_jacobian_prior", include_jacobian_prior))
+
         mcmc_info = None
         if run_mcmc:
             if map_info is not None:
@@ -334,7 +342,6 @@ class DSGE:
                 cov_prop = np.eye(theta_work.size) * 1e-3
 
             rng = mcmc_rng or np.random.default_rng()
-            mcmc_kwargs = dict(mcmc_kwargs or {})
             allowed_mcmc = {
                 "adapt",
                 "warmup",
@@ -367,6 +374,7 @@ class DSGE:
                 div=div,
                 R=mcmc_draws,
                 rng=rng,
+                include_jacobian=mcmc_include_jac,
                 **filtered_mcmc)
 
             draws_full = np.asarray(mcmc_info.get("draws", np.empty((0, 0))), dtype=float)
