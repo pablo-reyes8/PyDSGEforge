@@ -172,6 +172,9 @@ def gensys_from_schur(
 
     eps = 1e-6
     eu = np.array([0, 0], dtype=int)
+    div = float(div)
+    if div <= 0.0:
+        div = 1.0 + eps
 
     if np.any((np.abs(np.diag(S)) < eps) & (np.abs(np.diag(T)) < eps)):
         G1 = np.empty((0, 0), dtype=np.float64)
@@ -227,6 +230,11 @@ def gensys_from_schur(
         deta = np.zeros((0, 0), dtype=np.complex128)
         veta = np.zeros((neta, 0), dtype=np.complex128)
         bigev_len = 0
+    elif neta == 0:
+        ueta = np.zeros((nunstab, 0), dtype=np.complex128)
+        deta = np.zeros((0, 0), dtype=np.complex128)
+        veta = np.zeros((0, 0), dtype=np.complex128)
+        bigev_len = 0
     else:
         etawt = qt2.conj().T @ Pi                   
         U, s, Vh = svd(etawt, full_matrices=False)   
@@ -244,6 +252,10 @@ def gensys_from_schur(
         ueta1 = np.zeros((0, 0), dtype=np.complex128)
         deta1 = np.zeros((0, 0), dtype=np.complex128)
         veta1 = np.zeros((neta, 0), dtype=np.complex128)
+    elif neta == 0:
+        ueta1 = np.zeros((k, 0), dtype=np.complex128)
+        deta1 = np.zeros((0, 0), dtype=np.complex128)
+        veta1 = np.zeros((0, 0), dtype=np.complex128)
     else:
         etawt1 = qt1.conj().T @ Pi
         U1, s1, Vh1 = svd(etawt1, full_matrices=False)
@@ -266,6 +278,8 @@ def gensys_from_schur(
 
     if unique:
         eu[1] = 1
+    if eu[0] != 1:
+        eu[1] = 0
 
     # Construcción de tmat y de G0, G1 (complejos intermedios)
     if nunstab == 0:
@@ -377,7 +391,7 @@ def gensys(
     Notes
     -----
     * This function performs light validation (square matrices, compatible dimensions).
-    * It intentionally does NOT compute any default `div` itself.
+    * If `div <= 0`, a conservative default `1 + 1e-6` is used.
     """
 
     #normalize shapes
@@ -386,6 +400,8 @@ def gensys(
     Psi = np.asarray(Psi, dtype=np.float64)
     Pi = np.asarray(Pi, dtype=np.float64)
     c = np.asarray(c,dtype=np.float64).reshape(-1)
+    if div <= 0.0:
+        div = 1.0 + 1e-6
 
     if Gamma0.ndim != 2 or Gamma1.ndim != 2:
         raise ValueError("Gamma0 and Gamma1 must be 2D arrays.")

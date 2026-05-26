@@ -1,0 +1,1 @@
+"""Linear rational expectations solvers."""

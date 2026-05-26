@@ -1,0 +1,30 @@
+# Default numerical settings for PyDSGEforge experiments.
+solver:
+  div: 1.000001
+
+likelihood:
+  initial_covariance: stationary
+  diffuse_scale: 1000000.0
+
+map:
+  enabled: true
+  method: L-BFGS-B
+  hess_step: 0.0001
+  tau_scale: 0.5
+  include_jacobian_prior: false
+
+mcmc:
+  enabled: false
+  draws: 4000
+  adapt: true
+  warmup: 2000
+  adapt_block: 100
+  low: 0.15
+  high: 0.35
+  shrink: 0.5
+  expand: 2.0
+  log_every: 250
+
+irf:
+  horizon: 20
+  quantiles: [0.16, 0.5, 0.84]

@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import numpy as np
 from typing import Sequence, Union, Tuple
 
@@ -90,6 +89,8 @@ def plot_mcmc_diagnostics(
     figsize=(13, 4.8),
     cred_level: float = 0.90,
 ) -> None:
+    import matplotlib.pyplot as plt
+
     draws = np.asarray(draws_work, dtype=float)
     if burn_in > 0:
         if burn_in >= draws.shape[0]:

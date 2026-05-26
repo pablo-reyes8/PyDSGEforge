@@ -2,6 +2,17 @@
 
 This repository captures the core building blocks of a Dynare-style DSGE workflow implemented in Python. The code currently lives under `src/` and focuses on symbolic model definition, linearization, solution, and Bayesian inference primitives. A lightweight `DSGE` facade now ties those pieces together so you can go from symbolic equations and priors to steady state, MAP, and MCMC draws in a single call.
 
+## Quick Start
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest
+python scripts/run_pipeline.py --config configs/nk_example.yaml --dry-run
+```
+
+Additional documentation lives in `docs/`, reusable YAML settings in `configs/`,
+and CI is defined in `.github/workflows/ci.yml`.
+
 ## Design Overview
 
 The toolkit mirrors the familiar pipeline from model specification to empirical analysis:
@@ -45,6 +56,16 @@ src/
     param_specifications.py   # ParamSpec, PriorSpec, measurement structures
   transformations/
     param_transformations.py  # Forward and inverse parameter mappings (logistic uses a stable implementation)
+```
+
+Top-level support folders:
+
+```
+configs/                      # YAML defaults and experiment templates
+docs/                         # Usage, API, numerical conventions, testing notes
+scripts/                      # CLI entry points for configured runs
+.github/workflows/ci.yml      # Python test matrix and config validation
+Dockerfile                    # Reproducible test/container environment
 ```
 
 ## Modeling Example
@@ -142,7 +163,7 @@ model = DSGE(
 
 y_data = np.asarray(...)                 # e.g., dataframe_to_numpy(...)
 theta_guess = REG_NK.from_econ_dict({...})  # or pass a work-space vector directly
-bounds = list[(lower(int) , uper(int)) ... ] # list of tuples with the bounds for the MAP
+bounds = [(lower, upper), ...]          # optional MAP bounds in work space
 
 results = model.compute(
     registry=REG_NK,

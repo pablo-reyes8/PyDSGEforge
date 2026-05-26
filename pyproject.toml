@@ -15,9 +15,19 @@ dependencies = [
     "sympy>=1.12",
     "pandas>=2.0",
     "matplotlib>=3.7",
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4",
+    "pytest-cov>=4.1",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -s"

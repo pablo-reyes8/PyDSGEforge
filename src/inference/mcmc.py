@@ -126,6 +126,7 @@ def run_metropolis(
     adapt: bool = False,
     logs: bool = False,
     include_jacobian: bool = False,
+    likelihood_kwargs: Optional[Dict] = None,
     **adapt_kwargs,):
 
     if rng is None:
@@ -161,7 +162,8 @@ def run_metropolis(
             eta_t=eta_t,
             measurement=meas,
             div=div,
-            include_jacobian=include_jacobian,)
+            include_jacobian=include_jacobian,
+            likelihood_kwargs=likelihood_kwargs,)
 
     draws, acc_rate = metropolis_hastings(
         log_post,

@@ -213,6 +213,7 @@ class DSGE:
             Union[MeasurementSpec, Callable[[np.ndarray], MeasurementSpec]]
         ] = None,
         div: float = 1.0 + 1e-6,
+        likelihood_kwargs: Optional[Dict[str, Any]] = None,
         map: bool = True,
         map_bounds: Optional[Sequence[Tuple[float, float]]] = None,
         map_start: Optional[Sequence[float]] = None,
@@ -272,6 +273,7 @@ class DSGE:
             self._steady_full = None
             steady_full = None
 
+        likelihood_kwargs = dict(likelihood_kwargs or {})
         map_info = None
         map_kwargs = dict(map_kwargs or {})
         map_include_jac = bool(map_kwargs.pop("include_jacobian_prior", include_jacobian_prior))
@@ -305,6 +307,7 @@ class DSGE:
                 bounds=map_bounds,
                 div=div,
                 include_jacobian_prior=map_include_jac,
+                likelihood_kwargs=likelihood_kwargs,
                 **filtered_map_kwargs)
             
         self.map_result = map_info
@@ -375,6 +378,7 @@ class DSGE:
                 R=mcmc_draws,
                 rng=rng,
                 include_jacobian=mcmc_include_jac,
+                likelihood_kwargs=likelihood_kwargs,
                 **filtered_mcmc)
 
             draws_full = np.asarray(mcmc_info.get("draws", np.empty((0, 0))), dtype=float)

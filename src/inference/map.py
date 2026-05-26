@@ -1,5 +1,6 @@
 from scipy.optimize import minimize
 import numpy as np 
+from typing import Callable, Dict, Optional, Sequence, Tuple, Union
 
 from src.inference.posteriors import * 
 
@@ -113,7 +114,8 @@ def run_map(
     method: str = "L-BFGS-B",
     hess_step: float = 1e-4,
     tau_scale: float = 0.5,
-    include_jacobian_prior: bool = False , div = 0):
+    include_jacobian_prior: bool = False , div = 0,
+    likelihood_kwargs: Optional[Dict] = None):
 
     theta0 = np.asarray(theta0, dtype=float).reshape(-1)
     state_dim = len(y_t)
@@ -142,7 +144,8 @@ def run_map(
             eta_t=eta_t,
             measurement=meas,
             div=div, steady= steady , 
-            include_jacobian=include_jacobian_prior)
+            include_jacobian=include_jacobian_prior,
+            likelihood_kwargs=likelihood_kwargs)
 
     res = minimize(f_obj, theta0, method=method, bounds=bounds)
 

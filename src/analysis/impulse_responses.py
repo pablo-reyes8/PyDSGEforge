@@ -1,5 +1,4 @@
 import numpy as np 
-import matplotlib.pyplot as plt
 from src.inference.likelihoods import *
 
 def compute_irfs(
@@ -19,13 +18,17 @@ def compute_irfs(
     shock_indices=None,
     observable_names=None,
     shock_names=None,
-    div=0.0,):
+    div=0.0,
+    steady=None,):
 
     draws = np.asarray(draws_work, dtype=float)
     draws = draws[burn_in:] if burn_in > 0 else draws
 
+    if horizon < 1:
+        raise ValueError("horizon debe ser al menos 1.")
+
     n_shocks = len(eps_t)
-    shock_indices = shock_indices or range(n_shocks)
+    shock_indices = range(n_shocks) if shock_indices is None else shock_indices
 
     if shock_names is None:
         shock_names = [str(sym) for sym in eps_t]
@@ -35,7 +38,7 @@ def compute_irfs(
     Psi2_example = None
     valid_draws = []
     for theta in draws:
-        Theta1, Theta0, eu, Psi0, Psi2 = st_sp(theta,
+        Theta1, C, Theta0, eu, Psi0, Psi2 = st_sp(theta,
                                     equations,y_t,
                                     y_tp1,
                                     eps_t,
@@ -43,6 +46,7 @@ def compute_irfs(
                                     y_tm1=y_tm1,
                                     eta_t=eta_t,
                                     measurement=measurement,
+                                    steady=steady,
                                     div=div)
         
         if eu[0] < 1 or eu[1] < 1:
@@ -70,15 +74,15 @@ def compute_irfs(
     for theta, Theta1, Theta0, Psi0, Psi2, L in valid_draws:
         for j in shock_indices:
             eps_path = np.zeros((n_shocks, horizon))
-            # choque unitario (1 std) en t=1
-            eps_path[:, 1] = L[:, j]
+            # Choque de una desviacion estandar en impacto.
+            eps_path[:, 0] = L[:, j]
 
             state = np.zeros((Theta1.shape[0], horizon))
             obs = np.zeros((n_obs, horizon))
-            obs[:, 0] = Psi0  # baseline
 
-            for h in range(1, horizon):
-                state[:, h] = Theta1 @ state[:, h - 1] + Theta0 @ eps_path[:, h]
+            for h in range(horizon):
+                previous = state[:, h - 1] if h > 0 else np.zeros(Theta1.shape[0])
+                state[:, h] = Theta1 @ previous + Theta0 @ eps_path[:, h]
                 obs[:, h] = Psi2 @ state[:, h]
 
             irf_store[shock_names[j]].append(obs)
@@ -99,7 +103,8 @@ def compute_irfs(
     return results
 
 
-def plot_irf_bands(irf_dict, shocks=None, start=1, figsize=(7, 4), colors=None):
+def plot_irf_bands(irf_dict, shocks=None, start=0, figsize=(7, 4), colors=None):
+    import matplotlib.pyplot as plt
 
     shocks = shocks or list(irf_dict.keys())
     colors = colors or {

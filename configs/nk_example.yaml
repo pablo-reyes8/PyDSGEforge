@@ -1,0 +1,45 @@
+# Template for a New Keynesian run. Point `model.module` to a Python module
+# that exposes a factory returning the objects consumed by scripts/run_pipeline.py.
+model:
+  module: examples.colombia_nk
+  factory: build_model
+
+data:
+  path: data/processed/colombia_quarterly.csv
+  columns: [x, pi, i]
+
+parameters:
+  theta_econ:
+    beta: 0.99
+    sigma: 1.0
+    kappa: 0.1
+    phi_pi: 1.5
+    phi_x: 0.2
+    sig_d: 0.3
+    sig_s: 0.3
+    sig_m: 0.2
+
+solver:
+  div: 1.000001
+
+steady:
+  enabled: true
+  max_iter: 200
+  tol_f: 1.0e-10
+
+map:
+  enabled: true
+  method: L-BFGS-B
+  include_jacobian_prior: false
+
+mcmc:
+  enabled: true
+  draws: 4000
+  adapt: true
+  warmup: 2000
+  logs: true
+
+irf:
+  enabled: true
+  horizon: 20
+  quantiles: [0.16, 0.5, 0.84]

@@ -1,4 +1,5 @@
 import numpy as np 
+from typing import Dict, Optional
 from src.model_builders.linear_system import *
 from src.inference.likelihoods import *
 
@@ -12,7 +13,8 @@ def log_posterior(
     registry: ParamRegistry,
     *, y_tm1=None,
     eta_t=None, steady = None, 
-    measurement=None, div: float = 0.0, include_jacobian: bool = False):
+    measurement=None, div: float = 0.0, include_jacobian: bool = False,
+    likelihood_kwargs: Optional[Dict] = None):
 
     lp = registry.log_prior(theta_work, include_jacobian=include_jacobian)
 
@@ -30,7 +32,8 @@ def log_posterior(
         y_tm1=y_tm1,
         eta_t=eta_t,
         measurement=measurement,
-        div=div, steady= steady)
+        div=div, steady= steady,
+        **dict(likelihood_kwargs or {}))
     
     if not np.isfinite(ll):
         return float("-inf")
@@ -48,7 +51,8 @@ def log_posterior2(
     registry,
     *,  y_tm1=None, steady=None , 
     eta_t=None, measurement=None,
-    div: float = 0.0, include_jacobian: bool = False,):
+    div: float = 0.0, include_jacobian: bool = False,
+    likelihood_kwargs: Optional[Dict] = None,):
 
     return -log_posterior(
         theta_work,
@@ -62,4 +66,5 @@ def log_posterior2(
         eta_t=eta_t,
         measurement=measurement,
         div=div,
-        include_jacobian=include_jacobian , steady= steady)
+        include_jacobian=include_jacobian , steady= steady,
+        likelihood_kwargs=likelihood_kwargs)

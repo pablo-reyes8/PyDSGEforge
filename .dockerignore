@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+venv
+env
+__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+dist
+build
+*.egg-info
+notebooks/.ipynb_checkpoints
