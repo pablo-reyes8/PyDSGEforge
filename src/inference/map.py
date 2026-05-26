@@ -97,6 +97,33 @@ def build_proposal_from_hessian(H, tau_scale=0.5, min_eig=1e-8):
     return cov_spd, L
 
 
+def build_proposal_from_covariance(cov, tau_scale=0.5, min_eig=1e-8):
+    cov = np.asarray(cov, dtype=float)
+    cov = 0.5 * (cov + cov.T)
+    cov_spd = make_spd_eig(tau_scale * cov, min_eig)
+    try:
+        L = np.linalg.cholesky(cov_spd)
+    except np.linalg.LinAlgError:
+        L = np.linalg.cholesky(cov_spd + 1e-6 * np.eye(cov_spd.shape[0]))
+    return cov_spd, L
+
+
+def _optimizer_inverse_hessian(res, n_params: int):
+    hess_inv = getattr(res, "hess_inv", None)
+    if hess_inv is None:
+        return None
+    try:
+        if hasattr(hess_inv, "todense"):
+            H_inv = np.asarray(hess_inv.todense(), dtype=float)
+        else:
+            H_inv = np.asarray(hess_inv, dtype=float)
+    except Exception:
+        return None
+    if H_inv.shape != (n_params, n_params) or not np.all(np.isfinite(H_inv)):
+        return None
+    return 0.5 * (H_inv + H_inv.T)
+
+
 def run_map(
     theta0: Sequence[float],
     y: np.ndarray,
@@ -114,6 +141,7 @@ def run_map(
     method: str = "L-BFGS-B",
     hess_step: float = 1e-4,
     tau_scale: float = 0.5,
+    hessian_strategy: str = "auto",
     include_jacobian_prior: bool = False , div = 0,
     likelihood_kwargs: Optional[Dict] = None):
 
@@ -150,8 +178,29 @@ def run_map(
     res = minimize(f_obj, theta0, method=method, bounds=bounds)
 
     theta_map = np.asarray(res.x, dtype=float)
-    H = numerical_hessian_central(f_obj, theta_map, h=hess_step)
-    cov_prop, chol_prop = build_proposal_from_hessian(H, tau_scale=tau_scale, min_eig=1e-8)
+    strategy = hessian_strategy.lower()
+    if strategy not in {"auto", "optimizer", "numerical"}:
+        raise ValueError("hessian_strategy debe ser 'auto', 'optimizer' o 'numerical'.")
+
+    H_inv_opt = None
+    if strategy in {"auto", "optimizer"}:
+        H_inv_opt = _optimizer_inverse_hessian(res, theta_map.size)
+
+    if H_inv_opt is not None:
+        cov_prop, chol_prop = build_proposal_from_covariance(
+            H_inv_opt,
+            tau_scale=tau_scale,
+            min_eig=1e-8,
+        )
+        try:
+            H = np.linalg.pinv(H_inv_opt)
+        except np.linalg.LinAlgError:
+            H = np.eye(theta_map.size)
+        hessian_source = "optimizer"
+    else:
+        H = numerical_hessian_central(f_obj, theta_map, h=hess_step)
+        cov_prop, chol_prop = build_proposal_from_hessian(H, tau_scale=tau_scale, min_eig=1e-8)
+        hessian_source = "numerical"
 
 
     return {
@@ -161,5 +210,6 @@ def run_map(
         "message": res.message,
         "nit": res.nit,
         "hessian": H,
+        "hessian_source": hessian_source,
         "cov_proposal": cov_prop,
         "chol_proposal": chol_prop}

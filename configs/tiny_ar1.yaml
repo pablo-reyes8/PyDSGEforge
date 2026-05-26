@@ -58,6 +58,7 @@ map:
   include_jacobian_prior: false
   hess_step: 0.0001
   tau_scale: 0.4
+  hessian_strategy: auto
 
 mcmc:
   enabled: false

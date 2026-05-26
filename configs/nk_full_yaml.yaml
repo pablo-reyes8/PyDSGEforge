@@ -131,7 +131,8 @@ map:
   bounds: auto
   include_jacobian_prior: false
   hess_step: 0.0001
-  tau_scale: 0.3
+  tau_scale: 0.25
+  hessian_strategy: auto
 
 mcmc:
   enabled: false

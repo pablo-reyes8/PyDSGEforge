@@ -11,6 +11,7 @@ map:
   method: L-BFGS-B
   hess_step: 0.0001
   tau_scale: 0.5
+  hessian_strategy: auto
   include_jacobian_prior: false
 
 mcmc:

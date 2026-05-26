@@ -130,6 +130,7 @@ def run_from_config(config_path: Path, *, dry_run: bool = False) -> dict[str, An
             "method": map_cfg.get("method", "L-BFGS-B"),
             "hess_step": float(map_cfg.get("hess_step", 1e-4)),
             "tau_scale": float(map_cfg.get("tau_scale", 0.5)),
+            "hessian_strategy": map_cfg.get("hessian_strategy", "auto"),
             "include_jacobian_prior": bool(map_cfg.get("include_jacobian_prior", False)),
         },
         run_mcmc=bool(mcmc_cfg.get("enabled", False)),

@@ -33,11 +33,15 @@ class ModelSignature:
     n_shocks: int
 
     def __str__(self) -> str:
+        def _label(n: int, singular: str, plural: str) -> str:
+            return f"{n} {singular if n == 1 else plural}"
+
         return (
-            f"{self.n_equations} eqs | "
-            f"{self.n_states} states "
-            f"(+{self.n_leads} leads, {self.n_lags} lags) | "
-            f"{self.n_shocks} shocks")
+            f"{_label(self.n_equations, 'equation', 'equations')} | "
+            f"{_label(self.n_states, 'state', 'states')} "
+            f"({_label(self.n_leads, 'lead', 'leads')}, "
+            f"{_label(self.n_lags, 'lag', 'lags')}) | "
+            f"{_label(self.n_shocks, 'shock', 'shocks')}")
 
 
 def _escape_latex(text: str) -> str:
@@ -174,19 +178,12 @@ class DSGE:
         def _esc(x):
             return _escape_latex(str(x))
 
-        sig = _esc(getattr(self, "signature", ""))
+        sig = str(self.signature).replace("(", "| ").replace(", ", " | ").replace(")", "")
 
         meta = ""
         if getattr(self, "_metadata", None):
             items = [f"{_esc(k)}={_esc(v)}" for k, v in self._metadata.items()]
-            meta = r"\quad\text{\small(" + ", ".join(items) + ")}"
-
-        header = (
-            r"{\normalsize \mathbf{DSGE\ Model}}"
-            r"\\[2pt]"
-            r"{\scriptsize " + sig + r"}"
-            + meta
-            + r"\\[4pt]")
+            meta = r"\\[2pt]{\scriptsize\text{" + ", ".join(items) + r"}}"
 
         rows = []
         for idx, eq in enumerate(self._equations, start=1):
@@ -200,12 +197,16 @@ class DSGE:
         body = "\n".join(rows)
 
         latex = (
-            r"\begin{aligned}"
-            + header
+            r"\begin{array}{c}"
+            r"{\large\mathbf{DSGE\ Model}}"
+            r"\\[4pt]"
+            r"{\small\text{" + _esc(sig) + r"}}"
+            + meta
+            + r"\\[8pt]"
             + r"\left\{\,\begin{array}{rcll}"
             + body
             + r"\end{array}\right."
-            + r"\end{aligned}")
+            + r"\end{array}")
         return latex
 
 
@@ -303,7 +304,8 @@ class DSGE:
             allowed_map_keys = {
                 "method",
                 "hess_step",
-                "tau_scale",}
+                "tau_scale",
+                "hessian_strategy",}
             
             filtered_map_kwargs = {k: v for k, v in map_kwargs.items() if k in allowed_map_keys}
 
