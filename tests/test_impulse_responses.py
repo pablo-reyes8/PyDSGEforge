@@ -2,6 +2,7 @@ import numpy as np
 import sympy as sp
 
 from src.analysis.impulse_responses import compute_irfs
+from src.inference.likelihoods import st_sp
 from src.specification.param_registry_class import ParamRegistry
 from src.specification.param_specifications import ParamSpec, QSpec
 
@@ -64,3 +65,33 @@ def test_irf_supports_std_and_unit_shock_scaling():
     )
     assert std_result["eps_t"]["shock_scale"] == "std"
     assert unit_result["eps_t"]["shock_scale"] == "unit"
+
+
+def test_state_space_solution_uses_current_theta_values():
+    x_t, x_tm1, eps_t, rho = sp.symbols("x_t x_tm1 eps_t rho")
+    registry = ParamRegistry(params=[ParamSpec("rho", rho, transform="id")])
+    equations = [sp.Eq(x_t, rho * x_tm1 + eps_t)]
+
+    G1_low, *_ = st_sp(
+        np.array([0.25]),
+        equations,
+        [x_t],
+        None,
+        [eps_t],
+        registry,
+        y_tm1=[x_tm1],
+        div=1.0 + 1e-6,
+    )
+    G1_high, *_ = st_sp(
+        np.array([0.75]),
+        equations,
+        [x_t],
+        None,
+        [eps_t],
+        registry,
+        y_tm1=[x_tm1],
+        div=1.0 + 1e-6,
+    )
+
+    np.testing.assert_allclose(G1_low, [[0.25]], atol=1e-12)
+    np.testing.assert_allclose(G1_high, [[0.75]], atol=1e-12)

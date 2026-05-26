@@ -1,5 +1,6 @@
 import numpy as np
 import sympy as sp 
+from functools import lru_cache
 
 from src.specification.param_registry_class import * 
 from src.specification.param_specifications import *
@@ -63,6 +64,174 @@ def _to_float_array(M):
     if A.ndim == 1:
         A = A.reshape(-1, 1)
     return A
+
+
+def _eval_lambdified_matrix(fn, args, shape):
+    if 0 in shape:
+        return np.zeros(shape, dtype=np.float64)
+    arr = np.asarray(fn(*args), dtype=np.float64)
+    if arr.ndim == 0:
+        arr = arr.reshape(1, 1)
+    return arr.reshape(shape)
+
+
+def _assemble_numeric_system(
+    Gamma0,
+    Gamma_lead,
+    Gamma_lag,
+    Psi,
+    Pi,
+    c,
+    y_t,
+    y_tp1=None,
+    y_tm1=None,
+    measurement=None):
+    meas = measurement or MeasurementSpec()
+    Psi0, Psi2 = meas.build(n_state=len(y_t))
+
+    n_eq = Gamma0.shape[0]
+    n = len(y_t)
+    m = len(y_tp1) if y_tp1 else 0
+
+    if m > 0:
+        y_curr_names = [str(sym) for sym in y_t]
+        y_lead_names = [str(sym) for sym in y_tp1]
+
+        lead_indices = []
+        name_to_idx = {nm: i for i, nm in enumerate(y_curr_names)}
+        for nm in y_lead_names:
+            if nm in name_to_idx:
+                lead_indices.append(name_to_idx[nm])
+            else:
+                base = nm.replace("tp1", "t").replace("_t1", "_t")
+                if base in name_to_idx:
+                    lead_indices.append(name_to_idx[base])
+                else:
+                    raise ValueError(f"No puedo mapear {nm} a una variable actual.")
+
+        G0_top = np.hstack([Gamma0, -Gamma_lead])
+        G0_bot = np.zeros((m, n + m), dtype=np.float64)
+        for j, idx_curr in enumerate(lead_indices):
+            G0_bot[j, idx_curr] = 1.0
+            G0_bot[j, n + j] = -1.0
+        Gamma0_aug = np.vstack([G0_top, G0_bot])
+
+        Gamma1_top = np.zeros((n_eq, n + m), dtype=np.float64)
+        if y_tm1:
+            name_to_idx = {str(sym): i for i, sym in enumerate(y_t)}
+            for col, lag_sym in enumerate(y_tm1):
+                base = str(lag_sym).replace("tm1", "t").replace("_t1", "_t")
+                if base not in name_to_idx:
+                    raise ValueError(f"No puedo mapear la variable rezagada {lag_sym}.")
+                Gamma1_top[:, name_to_idx[base]] = -Gamma_lag[:, col]
+        Gamma1_bot = np.zeros((m, n + m), dtype=np.float64)
+        Gamma1_aug = np.vstack([Gamma1_top, Gamma1_bot])
+
+        Psi_aug = (
+            np.vstack([Psi, np.zeros((m, Psi.shape[1]))])
+            if Psi.size else np.zeros((n_eq + m, 0))
+        )
+        Pi_aug = (
+            np.vstack([Pi, np.zeros((m, Pi.shape[1]))])
+            if Pi.size else np.zeros((n_eq + m, 0))
+        )
+        c_aug = np.concatenate([c, np.zeros(m, dtype=np.float64)])
+
+        Psi2_aug = np.hstack([Psi2, np.zeros((Psi2.shape[0], m), dtype=np.float64)])
+        return Gamma0_aug, Gamma1_aug, Psi_aug, Pi_aug, Psi0, Psi2_aug, c_aug
+
+    Gamma1 = np.zeros_like(Gamma0)
+    if y_tm1:
+        name_to_idx = {str(sym): i for i, sym in enumerate(y_t)}
+        for col, lag_sym in enumerate(y_tm1):
+            base = str(lag_sym).replace("tm1", "t").replace("_t1", "_t")
+            if base not in name_to_idx:
+                raise ValueError(f"No puedo mapear la variable rezagada {lag_sym}.")
+            Gamma1[:, name_to_idx[base]] = -Gamma_lag[:, col]
+    return Gamma0, Gamma1, Psi, Pi, Psi0, Psi2, c
+
+
+class CompiledLinearSystem:
+    def __init__(self, equations, y_t, y_tp1, eps_t, y_tm1, eta_t, param_symbols):
+        self.equations = tuple(equations)
+        self.y_t = tuple(y_t)
+        self.y_tp1 = tuple(y_tp1 or ())
+        self.eps_t = tuple(eps_t or ())
+        self.y_tm1 = tuple(y_tm1 or ())
+        self.eta_t = tuple(eta_t or ())
+        self.param_symbols = tuple(sym for sym in param_symbols if sym is not None)
+
+        f = sp.Matrix(_as_residuals(self.equations))
+        y_curr = sp.Matrix(list(self.y_t))
+        y_lead = sp.Matrix(list(self.y_tp1))
+        y_lag = sp.Matrix(list(self.y_tm1))
+        eps = sp.Matrix(list(self.eps_t))
+        eta = sp.Matrix(list(self.eta_t))
+
+        G0_sym = f.jacobian(y_curr)
+        Glead_sym = f.jacobian(y_lead) if y_lead.shape != (0, 0) else sp.zeros(f.rows, 0)
+        Glag_sym = f.jacobian(y_lag) if y_lag.shape != (0, 0) else sp.zeros(f.rows, 0)
+        Psi_sym = f.jacobian(eps) if eps.shape != (0, 0) else sp.zeros(f.rows, 0)
+        Pi_sym = f.jacobian(eta) if eta.shape != (0, 0) else sp.zeros(f.rows, 0)
+        c_sym = -f
+
+        self.args_symbols = (
+            self.param_symbols
+            + self.y_t
+            + self.y_tp1
+            + self.y_tm1
+            + self.eps_t
+            + self.eta_t
+        )
+        self._shapes = {
+            "G0": G0_sym.shape,
+            "Glead": Glead_sym.shape,
+            "Glag": Glag_sym.shape,
+            "Psi": Psi_sym.shape,
+            "Pi": Pi_sym.shape,
+            "c": c_sym.shape,
+        }
+        self._fns = {
+            "G0": sp.lambdify(self.args_symbols, G0_sym, modules="numpy"),
+            "Glead": sp.lambdify(self.args_symbols, Glead_sym, modules="numpy"),
+            "Glag": sp.lambdify(self.args_symbols, Glag_sym, modules="numpy"),
+            "Psi": sp.lambdify(self.args_symbols, -Psi_sym, modules="numpy"),
+            "Pi": sp.lambdify(self.args_symbols, -Pi_sym, modules="numpy"),
+            "c": sp.lambdify(self.args_symbols, c_sym, modules="numpy"),
+        }
+
+    def evaluate(self, theta_work, registry, *, steady_values=None, measurement=None):
+        subs = registry.to_sympy_subs(theta_work)
+        if steady_values:
+            subs.update(steady_values)
+        else:
+            for sym in self.y_t + self.y_tp1 + self.y_tm1 + self.eps_t + self.eta_t:
+                subs[sym] = 0.0
+
+        args = [float(subs.get(sym, 0.0)) for sym in self.args_symbols]
+        Gamma0 = _eval_lambdified_matrix(self._fns["G0"], args, self._shapes["G0"])
+        Gamma_lead = _eval_lambdified_matrix(self._fns["Glead"], args, self._shapes["Glead"])
+        Gamma_lag = _eval_lambdified_matrix(self._fns["Glag"], args, self._shapes["Glag"])
+        Psi = _eval_lambdified_matrix(self._fns["Psi"], args, self._shapes["Psi"])
+        Pi = _eval_lambdified_matrix(self._fns["Pi"], args, self._shapes["Pi"])
+        c = _eval_lambdified_matrix(self._fns["c"], args, self._shapes["c"]).reshape(-1)
+
+        return _assemble_numeric_system(
+            Gamma0,
+            Gamma_lead,
+            Gamma_lag,
+            Psi,
+            Pi,
+            c,
+            self.y_t,
+            y_tp1=self.y_tp1,
+            y_tm1=self.y_tm1,
+            measurement=measurement)
+
+
+@lru_cache(maxsize=32)
+def get_compiled_linear_system(equations, y_t, y_tp1, eps_t, y_tm1, eta_t, param_symbols):
+    return CompiledLinearSystem(equations, y_t, y_tp1, eps_t, y_tm1, eta_t, param_symbols)
 
 
 def build_matrices(

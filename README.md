@@ -6,6 +6,8 @@ This repository captures the core building blocks of a Dynare-style DSGE workflo
 
 ```bash
 python -m pip install -e ".[dev]"
+# Optional JIT acceleration for the Kalman loop:
+python -m pip install -e ".[speed]"
 python -m pytest
 python scripts/run_pipeline.py --config configs/tiny_ar1.yaml
 python scripts/run_pipeline.py --config configs/nk_full_yaml.yaml --dry-run

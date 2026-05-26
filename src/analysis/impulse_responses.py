@@ -54,11 +54,14 @@ def compute_irfs(
         
         if eu[0] < 1 or eu[1] < 1:
             continue
-        try:
-            Q = registry.build_Q(theta, n_shocks)
-            L = np.linalg.cholesky(Q)
-        except np.linalg.LinAlgError:
-            continue
+        if shock_scale == "std":
+            try:
+                Q = registry.build_Q(theta, n_shocks)
+                L = np.linalg.cholesky(Q)
+            except np.linalg.LinAlgError:
+                continue
+        else:
+            L = None
         valid_draws.append((theta, Theta1, Theta0, Psi0, Psi2, L))
         if Psi2_example is None:
             Psi2_example = Psi2

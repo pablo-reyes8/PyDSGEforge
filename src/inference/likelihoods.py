@@ -8,6 +8,7 @@ from src.solvers.gensys import *
 from scipy.linalg import cho_factor, cho_solve
 from scipy.linalg import solve_discrete_lyapunov
 from numpy.linalg import slogdet
+from src.inference.kalman_fast import kalman_loglike_numba
 
 def st_sp(
     theta_work: Sequence[float],
@@ -32,15 +33,32 @@ def st_sp(
     else:
         meas_spec = measurement
 
-    Gamma0, Gamma1, Psi, Pi, Psi0, Psi2, c = build_matrices(
-        equations=equations,
-        y_t=y_t,
-        y_tp1=y_tp1,
-        eps_t=eps_t,
-        y_tm1=y_tm1,
-        eta_t=eta_t,
-        param_values=registry,
-        measurement=meas_spec, steady_values=steady)
+    try:
+        compiled = get_compiled_linear_system(
+            tuple(equations),
+            tuple(y_t),
+            tuple(y_tp1 or ()),
+            tuple(eps_t or ()),
+            tuple(y_tm1 or ()),
+            tuple(eta_t or ()),
+            tuple(registry.symbols),
+        )
+        Gamma0, Gamma1, Psi, Pi, Psi0, Psi2, c = compiled.evaluate(
+            theta_work,
+            registry,
+            steady_values=steady,
+            measurement=meas_spec,
+        )
+    except Exception:
+        Gamma0, Gamma1, Psi, Pi, Psi0, Psi2, c = build_matrices(
+            equations=equations,
+            y_t=y_t,
+            y_tp1=y_tp1,
+            eps_t=eps_t,
+            y_tm1=y_tm1,
+            eta_t=eta_t,
+            param_values=registry.to_sympy_subs(theta_work),
+            measurement=meas_spec, steady_values=steady)
 
     G1, C, impact, eu = gensys(Gamma0, Gamma1, c, Psi, Pi, div=div)
     return G1, C, impact, eu, Psi0, Psi2
@@ -100,7 +118,8 @@ def log_like(
     precomputed: Optional[Tuple[np.ndarray, ...]] = None,
     diffuse_scale: float = 1e6,
     initial_state=None,
-    initial_covariance="stationary"):
+    initial_covariance="stationary",
+    kalman_backend: str = "auto"):
 
     """
     Log-verosimilitud Gaussian Kalman filter:
@@ -161,6 +180,27 @@ def log_like(
         initial_state=initial_state,
         initial_covariance=initial_covariance,
         diffuse_scale=diffuse_scale)
+
+    if kalman_backend not in {"auto", "python", "numba"}:
+        raise ValueError("kalman_backend debe ser 'auto', 'python' o 'numba'.")
+
+    if kalman_backend in {"auto", "numba"}:
+        ll_fast = kalman_loglike_numba(
+            y,
+            Theta1,
+            C,
+            Theta0,
+            Q,
+            H,
+            np.asarray(Psi0, dtype=float).reshape(n_y),
+            Psi2,
+            s_bar.copy(),
+            P_bar.copy(),
+        )
+        if ll_fast is not None:
+            return ll_fast
+        if kalman_backend == "numba":
+            raise ImportError("kalman_backend='numba' requiere instalar numba.")
 
     const = n_y * np.log(2.0 * np.pi)
     ll_sum = 0.0
