@@ -6,8 +6,10 @@ try:
     from scipy.stats import uniform as _Uniform
     from scipy.stats import norm as _Normal
     from scipy.stats import invgamma as _InvGamma
+    from scipy.stats import beta as _Beta
+    from scipy.special import gammaln as _gammaln
 except Exception:
-    _Gamma = _Uniform = _Normal = _InvGamma = None 
+    _Gamma = _Uniform = _Normal = _InvGamma = _Beta = _gammaln = None 
 import sympy as sp
 
 from src.transformations.param_transformations import *
@@ -112,6 +114,25 @@ class PriorSpec:
         
         elif fam == "invgamma":
             return float(_InvGamma.logpdf(x, a=self.params["a"], scale=self.params["scale"]))
+
+        elif fam == "beta":
+            loc = self.params.get("loc", 0.0)
+            scale = self.params.get("scale", 1.0)
+            return float(_Beta.logpdf(x, a=self.params["a"], b=self.params["b"], loc=loc, scale=scale))
+
+        elif fam in {"invgamma1", "inv_gamma1", "dynare_invgamma"}:
+            s = float(self.params["s"])
+            nu = float(self.params["nu"])
+            x = float(x)
+            if x <= 0:
+                return float("-inf")
+            return float(
+                np.log(2.0)
+                - _gammaln(0.5 * nu)
+                - 0.5 * nu * (np.log(2.0) - np.log(s))
+                - (nu + 1.0) * np.log(x)
+                - 0.5 * s / (x * x)
+            )
         
         else:
             raise ValueError(f"Prior desconocida: {self.family}")

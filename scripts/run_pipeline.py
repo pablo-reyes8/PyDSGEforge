@@ -28,6 +28,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.model_builders.steady import SteadyConfig
+from src.config import build_bundle_from_config
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -61,6 +62,9 @@ def _load_data(cfg: dict[str, Any], bundle: dict[str, Any]) -> np.ndarray:
         return np.asarray(bundle["data"], dtype=float)
 
     data_cfg = cfg.get("data") or {}
+    if "values" in data_cfg:
+        return np.asarray(data_cfg["values"], dtype=float)
+
     path = data_cfg.get("path")
     columns = data_cfg.get("columns")
     if not path:
@@ -80,14 +84,15 @@ def run_from_config(config_path: Path, *, dry_run: bool = False) -> dict[str, An
     model_cfg = cfg.get("model") or {}
     module_name = model_cfg.get("module")
     factory_name = model_cfg.get("factory", "build_model")
-    if not module_name:
-        raise ValueError("model.module is required.")
 
     if dry_run:
         return {"status": "ok", "config": cfg}
 
-    factory = _load_factory(module_name, factory_name)
-    bundle = factory(cfg)
+    if module_name:
+        factory = _load_factory(module_name, factory_name)
+        bundle = factory(cfg)
+    else:
+        bundle = build_bundle_from_config(cfg)
 
     model = bundle["model"]
     registry = bundle["registry"]
@@ -138,6 +143,7 @@ def run_from_config(config_path: Path, *, dry_run: bool = False) -> dict[str, An
         result["irf"] = model.impulse_responses(
             horizon=int(irf_cfg.get("horizon", 20)),
             quantiles=irf_cfg.get("quantiles", [0.16, 0.5, 0.84]),
+            shock_scale=irf_cfg.get("shock_scale", "std"),
             plot=False,
         )
     return result

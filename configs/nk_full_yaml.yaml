@@ -1,0 +1,154 @@
+model:
+  name: FullYAMLNewKeynesian
+  source: configs/nk_full_yaml.yaml
+  variables:
+    states: [x_t, pi_t, i_t]
+    leads: [x_tp1, pi_tp1]
+    lags: []
+    shocks: [eps_d, eps_s, eps_m]
+    expectation_shocks: []
+  equations:
+    - "x_t = x_tp1 - (1 / sigma) * (i_t - pi_tp1) + eps_d"
+    - "pi_t = beta * pi_tp1 + kappa * x_t + eps_s"
+    - "i_t = phi_pi * pi_t + phi_x * x_t + eps_m"
+
+parameters:
+  specs:
+    beta:
+      symbol: beta
+      transform: logistic
+      role: struct
+      bounds: {lower: 0.90, upper: 0.999}
+      prior:
+        family: beta
+        params: {a: 391.05, b: 3.95, loc: 0.0, scale: 1.0}
+    sigma:
+      symbol: sigma
+      transform: exp
+      role: struct
+      bounds: {lower: 0.20, upper: 5.00}
+      prior:
+        family: gamma
+        params: {a: 9.0, scale: 0.1666666667}
+    kappa:
+      symbol: kappa
+      transform: exp
+      role: struct
+      bounds: {lower: 0.01, upper: 0.80}
+      prior:
+        family: gamma
+        params: {a: 4.0, scale: 0.025}
+    phi_pi:
+      symbol: phi_pi
+      transform: exp
+      role: struct
+      bounds: {lower: 0.50, upper: 4.00}
+      prior:
+        family: gamma
+        params: {a: 25.0, scale: 0.06}
+    phi_x:
+      symbol: phi_x
+      transform: exp
+      role: struct
+      bounds: {lower: 0.01, upper: 2.00}
+      prior:
+        family: gamma
+        params: {a: 6.25, scale: 0.08}
+    sig_d:
+      symbol: sig_d
+      transform: exp
+      role: shock_std
+      bounds: {lower: 0.05, upper: 10.00}
+      prior:
+        family: invgamma1
+        params: {s: 0.10875628191089724, nu: 4.175125642356515}
+    sig_s:
+      symbol: sig_s
+      transform: exp
+      role: shock_std
+      bounds: {lower: 0.05, upper: 10.00}
+      prior:
+        family: invgamma1
+        params: {s: 0.10875628191089724, nu: 4.175125642356515}
+    sig_m:
+      symbol: sig_m
+      transform: exp
+      role: shock_std
+      bounds: {lower: 0.05, upper: 10.00}
+      prior:
+        family: invgamma1
+        params: {s: 0.10875628191089724, nu: 4.175125642356515}
+  theta_econ:
+    beta: 0.99
+    sigma: 1.50
+    kappa: 0.10
+    phi_pi: 1.50
+    phi_x: 0.50
+    sig_d: 0.30
+    sig_s: 0.30
+    sig_m: 0.25
+
+q:
+  diag_params: [sig_d, sig_s, sig_m]
+
+h:
+  fixed:
+    - [0.0, 0.0, 0.0]
+    - [0.0, 0.0, 0.0]
+    - [0.0, 0.0, 0.0]
+
+data:
+  columns: [x, pi, i]
+  values:
+    - [-0.40,  0.10,  0.05]
+    - [-0.25,  0.15,  0.10]
+    - [-0.10,  0.12,  0.08]
+    - [ 0.05,  0.05,  0.02]
+    - [ 0.15, -0.02, -0.03]
+    - [ 0.10, -0.05, -0.04]
+    - [ 0.00, -0.03, -0.02]
+    - [-0.08,  0.02,  0.01]
+    - [-0.03,  0.04,  0.03]
+    - [ 0.06,  0.01,  0.01]
+    - [ 0.09, -0.01,  0.00]
+    - [ 0.02,  0.00,  0.00]
+
+steady:
+  enabled: false
+  max_iter: 200
+  tol_f: 1.0e-10
+
+solver:
+  div: 1.000001
+
+likelihood:
+  initial_covariance: stationary
+  diffuse_scale: 1000000.0
+
+map:
+  enabled: true
+  method: L-BFGS-B
+  bounds: auto
+  include_jacobian_prior: false
+  hess_step: 0.0001
+  tau_scale: 0.3
+
+mcmc:
+  enabled: false
+  draws: 5000
+  include_jacobian_prior: true
+  adapt: true
+  warmup: 3000
+  adapt_block: 500
+  low: 0.15
+  high: 0.35
+  shrink: 0.5
+  expand: 2.0
+  logs: true
+  log_every: 1000
+
+irf:
+  enabled: false
+  horizon: 20
+  quantiles: [0.16, 0.5, 0.84]
+  shock_scale: unit

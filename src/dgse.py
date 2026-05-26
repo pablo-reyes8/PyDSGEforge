@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from os import PathLike
 from typing import Any, Callable, Dict, Iterable, Iterator, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -56,6 +57,20 @@ def _escape_latex(text: str) -> str:
 
 
 class DSGE:
+    @classmethod
+    def from_yaml(cls, path_or_config):
+        """Construye (model, registry, theta) desde una configuración YAML."""
+        from src.config import build_bundle_from_config, load_yaml_config
+
+        cfg = (
+            load_yaml_config(path_or_config)
+            if isinstance(path_or_config, (str, bytes, PathLike))
+            else dict(path_or_config)
+        )
+        bundle = build_bundle_from_config(cfg)
+        theta = bundle.get("theta_econ", bundle.get("theta_work"))
+        return bundle["model"], bundle["registry"], theta
+
     def __init__(
         self,
         equations: Iterable[Union[sp.Equality, sp.Expr]],
@@ -435,20 +450,59 @@ class DSGE:
     def _build_prior_distribution(prior_spec):
         try:
             from scipy.stats import (
+                beta as stats_beta,
                 gamma as stats_gamma,
                 invgamma as stats_invgamma,
                 norm as stats_norm,
                 uniform as stats_uniform)
+            from scipy.special import gammaln
         except ImportError as exc:
             raise ImportError("Se requiere SciPy para evaluar priors.") from exc
 
         fam = prior_spec.family.lower()
         params = prior_spec.params
 
+        class _DynareInvGamma1:
+            def __init__(self, s, nu):
+                self.s = float(s)
+                self.nu = float(nu)
+                self._shape = 0.5 * self.nu
+                self._scale = 2.0 / self.s
+
+            def ppf(self, q):
+                q_arr = np.asarray(q, dtype=float)
+                z = stats_gamma.isf(q_arr, a=self._shape, scale=self._scale)
+                out = 1.0 / np.sqrt(z)
+                return float(out) if out.ndim == 0 else out
+
+            def mean(self):
+                if self.nu <= 1.0:
+                    return np.inf
+                return float(
+                    np.sqrt(0.5 * self.s)
+                    * np.exp(gammaln(0.5 * (self.nu - 1.0)) - gammaln(0.5 * self.nu))
+                )
+
+            def std(self):
+                if self.nu <= 2.0:
+                    return np.inf
+                mean = self.mean()
+                var = self.s / (self.nu - 2.0) - mean * mean
+                return float(np.sqrt(max(var, 0.0)))
+
         if fam == "gamma":
             return stats_gamma(a=params["a"], scale=params["scale"]), (0.0, np.inf)
         if fam == "invgamma":
             return stats_invgamma(a=params["a"], scale=params["scale"]), (0.0, np.inf)
+        if fam == "beta":
+            loc = params.get("loc", 0.0)
+            scale = params.get("scale", 1.0)
+            return (
+                stats_beta(a=params["a"], b=params["b"], loc=loc, scale=scale),
+                (loc, loc + scale),
+            )
+        if fam in {"invgamma1", "inv_gamma1", "dynare_invgamma"}:
+            return _DynareInvGamma1(params["s"], params["nu"]), (0.0, np.inf)
         if fam == "normal":
             return stats_norm(loc=params["loc"], scale=params["scale"]), (-np.inf, np.inf)
         if fam == "uniform":
@@ -869,6 +923,7 @@ class DSGE:
         shock_indices: Optional[Sequence[int]] = None,
         observable_names: Optional[Sequence[str]] = None,
         shock_names: Optional[Sequence[str]] = None,
+        shock_scale: str = "std",
         div: float = 0.0,
         plot: bool = True,
         plot_kwargs: Optional[Dict[str, Any]] = None):
@@ -918,6 +973,7 @@ class DSGE:
             shock_indices=shock_indices,
             observable_names=observable_names,
             shock_names=shock_names,
+            shock_scale=shock_scale,
             div=div)
 
         if plot:

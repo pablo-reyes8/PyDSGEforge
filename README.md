@@ -7,7 +7,8 @@ This repository captures the core building blocks of a Dynare-style DSGE workflo
 ```bash
 python -m pip install -e ".[dev]"
 python -m pytest
-python scripts/run_pipeline.py --config configs/nk_example.yaml --dry-run
+python scripts/run_pipeline.py --config configs/tiny_ar1.yaml
+python scripts/run_pipeline.py --config configs/nk_full_yaml.yaml --dry-run
 ```
 
 Additional documentation lives in `docs/`, reusable YAML settings in `configs/`,
@@ -24,16 +25,17 @@ The toolkit mirrors the familiar pipeline from model specification to empirical 
 5. **Analysis (`src/analysis/`)** - Contains impulse-response utilities that propagate draws through the solved model and plotting helpers for MCMC diagnostics.
 6. **Transformations (`src/transformations/`)** - Centralizes forward and inverse mappings (identity, exp, logistic, tanh01) that keep parameter constraints explicit and differentiable.
 
-These modules are designed to be composable: notebooks or scripts can register a model, call `build_matrices`, solve it with `gensys`, evaluate the likelihood or posterior, and then feed draws into IRF or diagnostic helpers without duplicating boilerplate. The `DSGE` facade included in `src/dsge.py` orchestrates the steady-state solver, MAP optimizer, and Metropolis-Hastings routines so the end-to-end workflow is a single method call.
+These modules are designed to be composable: notebooks or scripts can register a model, call `build_matrices`, solve it with `gensys`, evaluate the likelihood or posterior, and then feed draws into IRF or diagnostic helpers without duplicating boilerplate. The `DSGE` facade included in `src/dsge.py` orchestrates the steady-state solver, MAP optimizer, and Metropolis-Hastings routines so the end-to-end workflow is a single method call. For reproducible experiments, the same facade can now be built directly from a self-contained YAML file.
 
 ## Current Status
 
 - Core symbolic-to-linear builder and measurement helpers, including default identity measurement if none is provided.
 - `DSGE.compute` orchestrating steady state, MAP, and adaptive Metropolis-Hastings (with optional summary logging).
+- Native YAML configuration mode for declaring equations, variables, priors, transformations, stochastic blocks, data, and runtime settings without writing a Python model factory.
 - Gensys solver with robustness features (eigenvalue sorting, fallback logic).
 - Bayesian primitives: Gaussian state-space likelihood, MAP estimation, and Metropolis-Hastings with adaptive scaling.
 - Analysis utilities: impulse-response envelopes and MCMC trace/summary plots.
-- Pending integration layers: dataset loaders, experiment scripts, and automated regression tests.
+- Experiment CLI in `scripts/run_pipeline.py` and automated smoke tests for configured models.
 
 ## `src/` Layout (working set)
 
@@ -187,11 +189,113 @@ results = model.compute(
 
 `compute(..., log_summary=True)` prints a short report with steady-state diagnostics, MAP values (work and economic space), and MCMC acceptance statistics. Disable the console output with `log_summary=False`. The returned dictionary provides structured access: `results["steady"]`, `results["map"]`, and `results["mcmc"]`.
 
+## YAML-First Workflow
+
+For experiments that should be reproducible by editing a single file, PyDSGEforge supports native YAML model definitions. A YAML file can declare:
+
+- endogenous variables at `t`, leads, lags, structural shocks, and expectation shocks
+- SymPy-compatible equilibrium equations
+- parameter transformations (`id`, `exp`, `logistic`, `tanh01`)
+- priors (`normal`, `uniform`, `gamma`, `beta`, `invgamma`, `invgamma1`)
+- economic starting values and economic bounds
+- shock covariance `Q` and measurement covariance `H`
+- inline data or CSV-backed data
+- solver, likelihood, MAP, MCMC, and IRF settings
+
+Run a YAML model from the CLI:
+
+```bash
+python scripts/run_pipeline.py --config configs/nk_full_yaml.yaml
+```
+
+Validate the merged config without estimating:
+
+```bash
+python scripts/run_pipeline.py --config configs/nk_full_yaml.yaml --dry-run
+```
+
+Use the same YAML in a notebook:
+
+```python
+from pathlib import Path
+import numpy as np
+import yaml
+
+from src.dsge import DSGE
+
+model, registry, theta = DSGE.from_yaml("configs/nk_full_yaml.yaml")
+
+cfg = yaml.safe_load(Path("configs/nk_full_yaml.yaml").read_text())
+Y = np.asarray(cfg["data"]["values"], dtype=float)
+
+results = model.compute(
+    registry=registry,
+    theta_struct=theta,
+    data=Y,
+    compute_steady=cfg["steady"]["enabled"],
+    div=cfg["solver"]["div"],
+    likelihood_kwargs={
+        "initial_covariance": cfg["likelihood"]["initial_covariance"],
+        "diffuse_scale": cfg["likelihood"]["diffuse_scale"],
+    },
+    map=cfg["map"]["enabled"],
+    map_bounds=cfg["map"]["bounds"],
+    map_kwargs={
+        "method": cfg["map"]["method"],
+        "hess_step": cfg["map"]["hess_step"],
+        "tau_scale": cfg["map"]["tau_scale"],
+        "include_jacobian_prior": cfg["map"]["include_jacobian_prior"],
+    },
+    run_mcmc=cfg["mcmc"]["enabled"],
+    mcmc_draws=cfg["mcmc"]["draws"],
+    mcmc_kwargs=cfg["mcmc"],
+)
+```
+
+The complete New Keynesian template lives in `configs/nk_full_yaml.yaml`. It includes three equations, forward-looking variables, Dynare-compatible beta and inverse-gamma type-1 priors, work-space transformations, automatic MAP bounds derived from economic bounds, Kalman likelihood settings, MCMC tuning knobs, and IRF options. The smaller `configs/tiny_ar1.yaml` is intentionally minimal and is useful for quick smoke tests.
+
+The core structure looks like this:
+
+```yaml
+model:
+  variables:
+    states: [x_t, pi_t, i_t]
+    leads: [x_tp1, pi_tp1]
+    shocks: [eps_d, eps_s, eps_m]
+  equations:
+    - "x_t = x_tp1 - (1 / sigma) * (i_t - pi_tp1) + eps_d"
+    - "pi_t = beta * pi_tp1 + kappa * x_t + eps_s"
+    - "i_t = phi_pi * pi_t + phi_x * x_t + eps_m"
+
+parameters:
+  specs:
+    beta:
+      transform: logistic
+      bounds: {lower: 0.90, upper: 0.999}
+      prior:
+        family: beta
+        params: {a: 391.05, b: 3.95, loc: 0.0, scale: 1.0}
+  theta_econ:
+    beta: 0.99
+
+q:
+  diag_params: [sig_d, sig_s, sig_m]
+
+map:
+  enabled: true
+  method: L-BFGS-B
+  bounds: auto
+```
+
+If `model.module` is present in the YAML, the CLI uses the older Python factory mode. If `model.module` is absent, it treats the YAML as a native self-contained DSGE specification.
+
+
 ## Roadmap
 
 - Expand automated tests and synthetic examples that validate the linearization, steady solver, and inference stack against known models.
-- Publish structured experiment scripts (data ingestion, filtering, estimation, IRFs) once the integration layer is finalized.
-- Document configuration presets for common models (e.g., NK, RBC) and bundle reproducible notebooks.
+- Add more built-in YAML templates for common models (e.g., RBC, medium-scale NK).
+- Add period-by-period Kalman diagnostics against Dynare outputs for regression testing.
+- Bundle reproducible notebooks around the YAML workflow.
 
 Contributions and feedback on the current architecture are welcome while the higher-level API solidifies.
 

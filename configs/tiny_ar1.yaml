@@ -1,0 +1,66 @@
+model:
+  name: TinyAR1
+  source: configs/tiny_ar1.yaml
+  variables:
+    states: [x_t]
+    lags: [x_tm1]
+    shocks: [eps_t]
+  equations:
+    - "x_t = rho * x_tm1 + eps_t"
+
+parameters:
+  specs:
+    rho:
+      symbol: rho
+      transform: logistic
+      role: struct
+      bounds: {lower: 0.01, upper: 0.99}
+      prior:
+        family: beta
+        params: {a: 8.0, b: 3.0}
+    sigma_eps:
+      symbol: sigma_eps
+      transform: exp
+      role: shock_std
+      bounds: {lower: 0.05, upper: 2.0}
+      prior:
+        family: gamma
+        params: {a: 2.0, scale: 0.25}
+  theta_econ:
+    rho: 0.65
+    sigma_eps: 0.35
+
+q:
+  diag_params: [sigma_eps]
+
+h:
+  fixed: [[0.0]]
+
+data:
+  columns: [x]
+  values:
+    - [0.10]
+    - [0.18]
+    - [0.16]
+    - [0.23]
+    - [0.19]
+    - [0.14]
+    - [0.11]
+    - [0.08]
+
+steady:
+  enabled: false
+
+map:
+  enabled: true
+  method: L-BFGS-B
+  bounds: auto
+  include_jacobian_prior: false
+  hess_step: 0.0001
+  tau_scale: 0.4
+
+mcmc:
+  enabled: false
+
+irf:
+  enabled: false

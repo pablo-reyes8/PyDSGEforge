@@ -18,6 +18,7 @@ def compute_irfs(
     shock_indices=None,
     observable_names=None,
     shock_names=None,
+    shock_scale="std",
     div=0.0,
     steady=None,):
 
@@ -29,6 +30,8 @@ def compute_irfs(
 
     n_shocks = len(eps_t)
     shock_indices = range(n_shocks) if shock_indices is None else shock_indices
+    if shock_scale not in {"std", "unit"}:
+        raise ValueError("shock_scale debe ser 'std' o 'unit'.")
 
     if shock_names is None:
         shock_names = [str(sym) for sym in eps_t]
@@ -74,8 +77,12 @@ def compute_irfs(
     for theta, Theta1, Theta0, Psi0, Psi2, L in valid_draws:
         for j in shock_indices:
             eps_path = np.zeros((n_shocks, horizon))
-            # Choque de una desviacion estandar en impacto.
-            eps_path[:, 0] = L[:, j]
+            if shock_scale == "std":
+                # Shock de una desviacion estandar, usando la covarianza estimada Q.
+                eps_path[:, 0] = L[:, j]
+            else:
+                # Shock estructural unitario, como stoch_simul tras fijar var eps_j = 1.
+                eps_path[j, 0] = 1.0
 
             state = np.zeros((Theta1.shape[0], horizon))
             obs = np.zeros((n_obs, horizon))
@@ -97,6 +104,7 @@ def compute_irfs(
             "observables": observable_names,
             "horizon": horizon,
             "quantiles": quant_array,
+            "shock_scale": shock_scale,
             "summary": q_values,
             "raw": arr,}
 

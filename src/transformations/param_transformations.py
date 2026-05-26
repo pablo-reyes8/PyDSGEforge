@@ -1,4 +1,6 @@
 import numpy as np 
+from scipy.optimize import brentq
+from scipy.special import gammaln
 
 def _maybe_array(result):
     """
@@ -221,6 +223,46 @@ def inv_tanh01(p: float):
         raise ValueError("inv_tanh01: p debe estar en (0,1)")
 
     return float(np.arctanh(2.0*p - 1.0))
+
+def gamma_from_moments(mean, std):
+    shape = (mean / std) ** 2
+    scale = std**2 / mean
+    return shape, scale
+
+
+def beta_from_moments(mean, std, loc=0.0, scale=1.0):
+    """Dynare beta_pdf(mean, std) -> generalized beta shape parameters."""
+    m = (mean - loc) / scale
+    v = (std / scale) ** 2
+    common = m * (1.0 - m) / v - 1.0
+    return m * common, (1.0 - m) * common
+
+
+def dynare_inv_gamma1_from_moments(mean, std, lb=0.0):
+    """Dynare inv_gamma_pdf(mean, std) for stderr parameters.
+
+    Dynare's inv_gamma_pdf is inverse-gamma type 1. Its density is lpdfig1(x, s, nu),
+    not scipy.stats.invgamma over x directly.
+    """
+    mu2 = (mean - lb) ** 2
+    sigma2 = std**2
+
+    def ig1fun(nu):
+        return (
+            np.log(mean - lb)
+            - np.log(np.sqrt(((sigma2 + mu2) * (nu - 2.0)) / 2.0))
+            - gammaln((nu - 1.0) / 2.0)
+            + gammaln(nu / 2.0)
+        )
+
+    left = 2.0 + 1e-10
+    right = max(4.0, np.sqrt(2.0 * (2.0 + mu2 / sigma2)) * 2.0)
+    while ig1fun(left) * ig1fun(right) > 0.0:
+        right *= 2.0
+    nu = brentq(ig1fun, left, right, xtol=1e-13, rtol=1e-13)
+    s = (sigma2 + mu2) * (nu - 2.0)
+    return s, nu
+
 
 _TRANSFORMS = {
     "id": (tf_id, inv_id),
