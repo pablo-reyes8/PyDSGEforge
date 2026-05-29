@@ -295,7 +295,6 @@ If `model.module` is present in the YAML, the CLI uses the older Python factory 
 ## Roadmap
 
 - Expand automated tests and synthetic examples that validate the linearization, steady solver, and inference stack against known models.
-- Add more built-in YAML templates for common models (e.g., RBC, medium-scale NK).
 - Add period-by-period Kalman diagnostics against Dynare outputs for regression testing.
 - Bundle reproducible notebooks around the YAML workflow.
 
