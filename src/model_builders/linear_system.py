@@ -109,11 +109,13 @@ def _assemble_numeric_system(
                 else:
                     raise ValueError(f"No puedo mapear {nm} a una variable actual.")
 
-        G0_top = np.hstack([Gamma0, -Gamma_lead])
+        # Let f_t = E_t[y_{t+1}] for the variables that appear with a lead.
+        # The model equations therefore contain Gamma_lead @ f_t on the
+        # contemporaneous (left-hand) side of the Sims system.
+        G0_top = np.hstack([Gamma0, Gamma_lead])
         G0_bot = np.zeros((m, n + m), dtype=np.float64)
         for j, idx_curr in enumerate(lead_indices):
             G0_bot[j, idx_curr] = 1.0
-            G0_bot[j, n + j] = -1.0
         Gamma0_aug = np.vstack([G0_top, G0_bot])
 
         Gamma1_top = np.zeros((n_eq, n + m), dtype=np.float64)
@@ -124,17 +126,26 @@ def _assemble_numeric_system(
                 if base not in name_to_idx:
                     raise ValueError(f"No puedo mapear la variable rezagada {lag_sym}.")
                 Gamma1_top[:, name_to_idx[base]] = -Gamma_lag[:, col]
+        # S y_t = f_{t-1} + eta_t, where eta_t is the one-step-ahead
+        # forecast error.  These identities are what allow gensys to impose
+        # the rational-expectations solution.
         Gamma1_bot = np.zeros((m, n + m), dtype=np.float64)
+        for j in range(m):
+            Gamma1_bot[j, n + j] = 1.0
         Gamma1_aug = np.vstack([Gamma1_top, Gamma1_bot])
 
         Psi_aug = (
             np.vstack([Psi, np.zeros((m, Psi.shape[1]))])
             if Psi.size else np.zeros((n_eq + m, 0))
         )
-        Pi_aug = (
-            np.vstack([Pi, np.zeros((m, Pi.shape[1]))])
-            if Pi.size else np.zeros((n_eq + m, 0))
-        )
+        n_eta = Pi.shape[1]
+        Pi_aug = np.vstack([
+            np.hstack([Pi, np.zeros((n_eq, m), dtype=np.float64)]),
+            np.hstack([
+                np.zeros((m, n_eta), dtype=np.float64),
+                np.eye(m, dtype=np.float64),
+            ]),
+        ])
         c_aug = np.concatenate([c, np.zeros(m, dtype=np.float64)])
 
         Psi2_aug = np.hstack([Psi2, np.zeros((Psi2.shape[0], m), dtype=np.float64)])
@@ -315,12 +326,11 @@ def build_matrices(
                 else:
                     raise ValueError(f"No puedo mapear {nm} a una variable actual.")
 
-        # Γ0 extendido: 
-        G0_top = np.hstack([Gamma0, -Gamma_lead])
+        # Γ0 extendido con f_t = E_t[y_{t+1}].
+        G0_top = np.hstack([Gamma0, Gamma_lead])
         G0_bot = np.zeros((m, n + m), dtype=np.float64)
         for j, idx_curr in enumerate(lead_indices):
             G0_bot[j, idx_curr] = 1.0
-            G0_bot[j, n + j]    = -1.0
         Gamma0_aug = np.vstack([G0_top, G0_bot])
 
         Gamma1_top = np.zeros((n_eq, n + m), dtype=np.float64)
@@ -331,11 +341,21 @@ def build_matrices(
                 if base not in name_to_idx:
                     raise ValueError(f"No puedo mapear la variable rezagada {lag_sym}.")
                 Gamma1_top[:, name_to_idx[base]] = -Gamma_lag[:, col]
+        # S y_t = f_{t-1} + eta_t (error de pronostico racional).
         Gamma1_bot = np.zeros((m, n + m), dtype=np.float64)
+        for j in range(m):
+            Gamma1_bot[j, n + j] = 1.0
         Gamma1_aug = np.vstack([Gamma1_top, Gamma1_bot])
 
         Psi_aug = np.vstack([Psi, np.zeros((m, Psi.shape[1]))]) if Psi.size else np.zeros((n_eq + m, 0))
-        Pi_aug  = np.vstack([Pi, np.zeros((m, Pi.shape[1]))])   if Pi.size else np.zeros((n_eq + m, 0))
+        n_eta = Pi.shape[1]
+        Pi_aug = np.vstack([
+            np.hstack([Pi, np.zeros((n_eq, m), dtype=np.float64)]),
+            np.hstack([
+                np.zeros((m, n_eta), dtype=np.float64),
+                np.eye(m, dtype=np.float64),
+            ]),
+        ])
         c_aug   = np.concatenate([c, np.zeros(m, dtype=np.float64)])
 
         Psi2_aug = np.hstack([Psi2, np.zeros((Psi2.shape[0], m), dtype=np.float64)])
