@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77", "wheel"]
+requires = ["setuptools>=83.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -25,24 +25,24 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "numpy>=1.25",
-    "scipy>=1.11",
-    "sympy>=1.12",
-    "pandas>=2.0",
-    "matplotlib>=3.7",
-    "PyYAML>=6.0",
+    "numpy>=2.2.6",
+    "scipy>=1.15.3",
+    "sympy>=1.14.0",
+    "pandas>=2.3.3",
+    "matplotlib>=3.10.9",
+    "PyYAML>=6.0.3",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "build>=1.2",
-    "pre-commit>=3.7",
-    "pytest>=7.4",
-    "pytest-cov>=4.1",
-    "ruff>=0.5",
+    "build>=1.5.1",
+    "pre-commit>=4.6.0",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.21",
 ]
 speed = [
-    "numba>=0.59",
+    "numba>=0.66.0",
 ]
 
 [project.urls]
