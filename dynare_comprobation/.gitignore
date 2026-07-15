@@ -1,0 +1,19 @@
+# Dynare-generated source, bytecode, logs, figures, and posterior work files.
+/+nk_colombia/
+/graphs/
+/metropolis/
+/model/
+/Output/
+/prior/
+/nk_colombia/
+/*.log
+/*.mat
+/*.eps
+/*.fig
+/*.ofig
+/*.pdf
+/*.tex
+/*.txt
+/*.m
+/*.mex*
+/checksum

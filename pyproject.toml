@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,8 +7,23 @@ name = "pydsge"
 version = "0.1.0"
 description = "Dynare-style DSGE modeling toolkit in Python."
 readme = "README.md"
-license = { text = "MIT License" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
+authors = [
+    { name = "Pablo Reyes" },
+]
+keywords = ["DSGE", "Bayesian estimation", "Dynare", "econometrics", "macroeconomics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
 dependencies = [
     "numpy>=1.25",
     "scipy>=1.11",
@@ -20,12 +35,22 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "build>=1.2",
+    "pre-commit>=3.7",
     "pytest>=7.4",
     "pytest-cov>=4.1",
+    "ruff>=0.5",
 ]
 speed = [
     "numba>=0.59",
 ]
+
+[project.urls]
+Homepage = "https://github.com/pablo-reyes8/PyDSGEforge"
+Documentation = "https://github.com/pablo-reyes8/PyDSGEforge/tree/main/docs"
+Repository = "https://github.com/pablo-reyes8/PyDSGEforge.git"
+Issues = "https://github.com/pablo-reyes8/PyDSGEforge/issues"
+Changelog = "https://github.com/pablo-reyes8/PyDSGEforge/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -33,4 +58,23 @@ include = ["src*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra -s"
+addopts = "-ra -s --strict-markers"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["nk_colombia"]
+
+[tool.ruff.lint]
+# Start with correctness-critical rules while the pre-1.0 codebase is
+# progressively normalized; this keeps CI useful without a repository-wide
+# formatting rewrite in an unrelated numerical change.
+select = ["E9", "F63", "F7", "F82"]
+
+[tool.coverage.run]
+branch = true
+source = ["src"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

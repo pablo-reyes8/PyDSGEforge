@@ -6,6 +6,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Python ${{ matrix.python-version }}
@@ -30,8 +37,54 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      - name: Lint
+        if: matrix.python-version == '3.12'
+        run: python -m ruff check src tests scripts dynare_comprobation/validate.py
+
       - name: Run tests
         run: python -m pytest --cov=src --cov-report=term-missing
 
       - name: Validate default config
         run: python scripts/run_pipeline.py --config configs/nk_example.yaml --dry-run
+
+      - name: Validate Dynare parity fixture
+        if: matrix.python-version == '3.12'
+        run: python dynare_comprobation/validate.py
+
+  package:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Build source and wheel distributions
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Verify wheel can be installed
+        run: |
+          python -m venv /tmp/pydsgeforge-wheel
+          /tmp/pydsgeforge-wheel/bin/python -m pip install dist/*.whl
+          cd /tmp
+          /tmp/pydsgeforge-wheel/bin/python -c "from src import DSGE; print(DSGE)"
+
+  docker:
+    name: Build test container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build test stage
+        run: docker build --target test -t pydsgeforge:test .
+
+      - name: Run container tests
+        run: docker run --rm pydsgeforge:test

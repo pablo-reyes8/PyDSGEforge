@@ -1,0 +1,42 @@
+name: Bug report
+description: Report incorrect behavior or a numerical regression.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping make PyDSGEforge more reliable.
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem
+      description: Describe the observed and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include a small YAML/model, command, data shape, and traceback.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: conventions
+    attributes:
+      label: Numerical conventions
+      description: State initialization, prefiltering, shock scale, seed, and comparison software/version.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: Python 3.12, PyDSGEforge commit, OS, NumPy/SciPy versions
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and removed confidential data.
+          required: true

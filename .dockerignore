@@ -1,5 +1,8 @@
 .git
 .github
+.coverage
+.editorconfig
+.pre-commit-config.yaml
 .venv
 venv
 env
@@ -13,3 +16,13 @@ dist
 build
 *.egg-info
 notebooks/.ipynb_checkpoints
+notebooks
+outputs
+data
+docs
+nk_colombia
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+CHANGELOG.md
+CITATION.cff

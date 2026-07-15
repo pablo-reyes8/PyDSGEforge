@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use PyDSGEforge in research, please cite the software using this metadata."
+type: software
+title: "PyDSGEforge: pure-Python DSGE modeling and Bayesian estimation"
+version: 0.1.0
+authors:
+  - family-names: Reyes
+    given-names: Pablo
+repository-code: "https://github.com/pablo-reyes8/PyDSGEforge"
+url: "https://github.com/pablo-reyes8/PyDSGEforge"
+license: MIT
+keywords:
+  - DSGE
+  - Bayesian estimation
+  - Dynare
+  - econometrics
+  - macroeconomics

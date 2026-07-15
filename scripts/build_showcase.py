@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import yaml
-from scipy.io import loadmat
 from scipy.stats import gaussian_kde, norm
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -208,19 +207,10 @@ def estimate_yaml_showcase(relative_path: str, seed: int, draws_override: int | 
 def _dynare_bundle_and_mode():
     cfg = _load_yaml("configs/nk_full_yaml.yaml")
     bundle = build_bundle_from_config(cfg)
-    mode_file = loadmat(ROOT / "nk_colombia/Output/nk_colombia_mode.mat", squeeze_me=True)
-    values = np.asarray(mode_file["xparam1"], dtype=float)
-    mode = {
-        "sig_d": values[0],
-        "sig_s": values[1],
-        "sig_m": values[2],
-        "beta": values[3],
-        "sigma": values[4],
-        "kappa": values[5],
-        "phi_pi": values[6],
-        "phi_x": values[7],
-    }
-    return cfg, bundle, mode, mode_file
+    mode_record = json.loads(
+        (ROOT / "dynare_comprobation/reference/dynare_mode.json").read_text(encoding="utf-8")
+    )
+    return cfg, bundle, mode_record["parameters"], mode_record
 
 
 def _plot_posterior_comparison(py_draws: pd.DataFrame, dynare_draws: pd.DataFrame, output_stem: Path) -> None:
@@ -296,11 +286,13 @@ def _plot_dynare_irf_comparison(py_impact: np.ndarray, dynare_impact: np.ndarray
 
 
 def build_dynare_comparison(draws: int = 4000) -> dict:
-    cfg, bundle, mode, mode_file = _dynare_bundle_and_mode()
+    cfg, bundle, mode, mode_record = _dynare_bundle_and_mode()
     model = bundle["model"]
     registry = bundle["registry"]
     theta_mode = registry.from_econ_dict(mode)
-    data = loadmat(ROOT / "nk_colombia/metropolis/nk_colombia_data.mat", squeeze_me=True)["stock_data"].T.astype(float)
+    data = pd.read_csv(ROOT / "dynare_comprobation/data/colombia_nk_quarterly.csv")[
+        ["x", "pi", "i"]
+    ].to_numpy(dtype=float)
     common = dict(
         equations=model._equations,
         y_t=model._y_t,
@@ -313,7 +305,7 @@ def build_dynare_comparison(draws: int = 4000) -> dict:
     )
     py_loglike = log_like(theta_mode, data, **common, kalman_backend="python")
     logprior = registry.log_prior(theta_mode, include_jacobian=False)
-    dynare_logposterior = -float(mode_file["fval"])
+    dynare_logposterior = -float(mode_record["negative_log_posterior"])
     dynare_loglike = dynare_logposterior - logprior
 
     result = model.compute(
@@ -345,17 +337,15 @@ def build_dynare_comparison(draws: int = 4000) -> dict:
     plt.close("all")
 
     py_draws = registry.to_econ_dict_subset(model._mcmc_draws_after_burn, names=registry.names)
-    dynare_chain_file = loadmat(ROOT / "nk_colombia/metropolis/nk_colombia_param1.mat", squeeze_me=True)
-    dynare_raw = dynare_chain_file["stock"]
-    dynare_draws = pd.DataFrame(
-        dynare_raw,
-        columns=["sig_d", "sig_s", "sig_m", "beta", "sigma", "kappa", "phi_pi", "phi_x"],
+    dynare_draws = pd.read_csv(
+        ROOT / "dynare_comprobation/reference/dynare_posterior_draws.csv"
     )
+    dynare_order = ["sig_d", "sig_s", "sig_m", "beta", "sigma", "kappa", "phi_pi", "phi_x"]
+    dynare_raw = dynare_draws[dynare_order].to_numpy(dtype=float)
 
     validation_indices = np.linspace(0, len(dynare_raw) - 1, 25, dtype=int)
-    stored_logposterior = np.asarray(dynare_chain_file["stock_logpo"], dtype=float)
+    stored_logposterior = dynare_draws["log_posterior"].to_numpy(dtype=float)
     validation_differences = []
-    dynare_order = ["sig_d", "sig_s", "sig_m", "beta", "sigma", "kappa", "phi_pi", "phi_x"]
     for idx in validation_indices:
         theta = registry.from_econ_dict(dict(zip(dynare_order, dynare_raw[idx])))
         py_value = log_posterior(
