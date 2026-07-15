@@ -291,6 +291,64 @@ map:
 
 If `model.module` is present in the YAML, the CLI uses the older Python factory mode. If `model.module` is absent, it treats the YAML as a native self-contained DSGE specification.
 
+## Dynare parity and richer DSGE showcases
+
+The forward-looking state augmentation is validated against the Dynare/Octave
+run stored under `nk_colombia/`. Both implementations use the same equations,
+prefiltered observations, priors, posterior mode, and unit-shock convention.
+
+| Numerical check | Dynare | PyDSGEforge | Absolute difference |
+|---|---:|---:|---:|
+| Log likelihood at the Dynare mode | -555.4646535601 | -555.4646535592 | 9.14e-10 |
+| Log posterior at the Dynare mode | -586.7712107416 | -586.7712107406 | 9.14e-10 |
+| Log posterior over 25 saved Dynare draws | — | — | 1.82e-9 maximum |
+| Unit-shock IRFs | — | — | 9.99e-16 maximum |
+
+The posterior figure compares the 500 retained Dynare draws with 10,500
+post-warmup PyDSGEforge draws. Small differences between the empirical KDEs
+reflect finite-chain Monte Carlo variation; direct evaluation of the same 25
+Dynare draws agrees to less than `2e-9` everywhere.
+
+<p align="center">
+  <img src="outputs/dynare_comparison/posterior_comparison.png" width="96%" alt="Dynare and PyDSGEforge posterior comparison">
+</p>
+
+<p align="center">
+  <img src="outputs/dynare_comparison/irf_comparison.png" width="88%" alt="Dynare and PyDSGEforge IRF comparison">
+</p>
+
+Two larger YAML-first examples exercise leads, lags, persistent shocks,
+measurement error, MAP estimation, adaptive MCMC, and posterior IRF bands:
+
+| Model | Economic ingredients | State system | Final MCMC acceptance |
+|---|---|---:|---:|
+| [`HybridNKMedium`](configs/hybrid_nk_medium.yaml) | Habit, inflation indexation, interest-rate smoothing, AR(1) demand/cost-push/policy shocks | 8 states, 3 shocks | 20.5% |
+| [`SmallOpenEconomyNK`](configs/open_economy_nk.yaml) | Hybrid IS/Phillips blocks, exchange rate, natural rate, open-economy Taylor rule, 4 persistent shocks | 9 states, 4 shocks | 23.8% |
+
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>Hybrid medium-scale NK</strong></td>
+    <td width="50%" align="center"><strong>Small open-economy NK</strong></td>
+  </tr>
+  <tr>
+    <td><img src="outputs/hybrid_nk_medium/irfs.png" width="100%" alt="Hybrid NK posterior IRFs"></td>
+    <td><img src="outputs/open_economy_nk/irfs.png" width="100%" alt="Open economy NK posterior IRFs"></td>
+  </tr>
+</table>
+
+The checked-in synthetic data use fixed seeds and are generated from each
+model's own solved state space. Rebuild every dataset, estimation result,
+PNG/PDF figure, posterior draw file, and metric with:
+
+```bash
+python scripts/build_showcase.py
+```
+
+Machine-readable results are available in
+[`outputs/showcase_report.json`](outputs/showcase_report.json). The showcase
+builder is intentionally a script rather than a notebook so the README assets
+remain reproducible in CI or from a terminal.
+
 
 ## Roadmap
 

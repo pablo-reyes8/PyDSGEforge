@@ -1,0 +1,124 @@
+model:
+  name: HybridNKMedium
+  source: configs/hybrid_nk_medium.yaml
+  variables:
+    states: [x_t, pi_t, i_t, z_t, u_t, m_t]
+    leads: [x_tp1, pi_tp1]
+    lags: [x_tm1, pi_tm1, i_tm1, z_tm1, u_tm1, m_tm1]
+    shocks: [eps_z, eps_u, eps_m]
+  equations:
+    - "x_t = h * x_tm1 + (1 - h) * x_tp1 - (1 / 1.5) * (i_t - pi_tp1 - z_t)"
+    - "pi_t = gamma_pi * pi_tm1 + 0.99 * (1 - gamma_pi) * pi_tp1 + 0.12 * x_t + u_t"
+    - "i_t = rho_i * i_tm1 + (1 - rho_i) * (phi_pi * pi_t + phi_x * x_t) + m_t"
+    - "z_t = rho_z * z_tm1 + eps_z"
+    - "u_t = rho_u * u_tm1 + eps_u"
+    - "m_t = rho_m * m_tm1 + eps_m"
+
+parameters:
+  specs:
+    h:
+      transform: logistic
+      bounds: {lower: 0.20, upper: 0.90}
+      prior: {family: beta, params: {a: 6.5, b: 3.5}}
+    gamma_pi:
+      transform: logistic
+      bounds: {lower: 0.05, upper: 0.80}
+      prior: {family: beta, params: {a: 3.0, b: 7.0}}
+    rho_i:
+      transform: logistic
+      bounds: {lower: 0.20, upper: 0.98}
+      prior: {family: beta, params: {a: 7.5, b: 2.5}}
+    phi_pi:
+      transform: exp
+      bounds: {lower: 1.01, upper: 3.00}
+      prior: {family: gamma, params: {a: 25.0, scale: 0.068}}
+    phi_x:
+      transform: exp
+      bounds: {lower: 0.02, upper: 1.00}
+      prior: {family: gamma, params: {a: 4.0, scale: 0.0625}}
+    rho_z:
+      transform: logistic
+      bounds: {lower: 0.10, upper: 0.98}
+      prior: {family: beta, params: {a: 7.0, b: 3.0}}
+    rho_u:
+      transform: logistic
+      bounds: {lower: 0.05, upper: 0.95}
+      prior: {family: beta, params: {a: 5.0, b: 4.0}}
+    rho_m:
+      transform: logistic
+      bounds: {lower: 0.01, upper: 0.90}
+      prior: {family: beta, params: {a: 3.0, b: 5.0}}
+    sig_z:
+      transform: exp
+      role: shock_std
+      bounds: {lower: 0.02, upper: 0.60}
+      prior: {family: gamma, params: {a: 4.0, scale: 0.045}}
+    sig_u:
+      transform: exp
+      role: shock_std
+      bounds: {lower: 0.02, upper: 0.50}
+      prior: {family: gamma, params: {a: 4.0, scale: 0.030}}
+    sig_m:
+      transform: exp
+      role: shock_std
+      bounds: {lower: 0.01, upper: 0.40}
+      prior: {family: gamma, params: {a: 4.0, scale: 0.020}}
+  theta_econ:
+    h: 0.65
+    gamma_pi: 0.30
+    rho_i: 0.75
+    phi_pi: 1.70
+    phi_x: 0.25
+    rho_z: 0.75
+    rho_u: 0.60
+    rho_m: 0.35
+    sig_z: 0.18
+    sig_u: 0.12
+    sig_m: 0.08
+
+q:
+  diag_params: [sig_z, sig_u, sig_m]
+
+h:
+  fixed:
+    - [0.0004, 0, 0, 0, 0, 0]
+    - [0, 0.0004, 0, 0, 0, 0]
+    - [0, 0, 0.0004, 0, 0, 0]
+    - [0, 0, 0, 0.0001, 0, 0]
+    - [0, 0, 0, 0, 0.0001, 0]
+    - [0, 0, 0, 0, 0, 0.0001]
+
+data:
+  path: data/hybrid_nk_synthetic.csv
+  columns: [x, pi, i, demand, cost_push, monetary]
+
+steady: {enabled: false}
+solver: {div: 1.000001}
+likelihood: {initial_covariance: stationary, diffuse_scale: 1000000.0}
+map:
+  enabled: true
+  method: L-BFGS-B
+  bounds: auto
+  include_jacobian_prior: false
+  hess_step: 0.0001
+  tau_scale: 0.25
+  hessian_strategy: auto
+mcmc:
+  enabled: true
+  draws: 2500
+  include_jacobian_prior: true
+  adapt: true
+  warmup: 1000
+  adapt_block: 250
+  low: 0.15
+  high: 0.35
+  shrink: 0.5
+  expand: 1.5
+  logs: true
+  log_every: 500
+irf:
+  enabled: true
+  horizon: 24
+  quantiles: [0.16, 0.5, 0.84]
+  shock_scale: std
+

@@ -1,0 +1,18 @@
+{
+  "bk": [
+    1,
+    1
+  ],
+  "dynare_log_likelihood": -555.4646535600904,
+  "pydsgeforge_log_likelihood": -555.4646535591766,
+  "absolute_log_likelihood_difference": 9.138148016063496e-10,
+  "dynare_log_posterior": -586.7712107415508,
+  "pydsgeforge_log_posterior_at_dynare_mode": -586.771210740637,
+  "absolute_log_posterior_difference": 9.138148016063496e-10,
+  "maximum_irf_difference": 9.992007221626409e-16,
+  "posterior_validation_points": 25,
+  "maximum_log_posterior_difference_on_dynare_draws": 1.8225136955152266e-09,
+  "python_mcmc_acceptance_rate": 0.30391666666666667,
+  "python_posterior_draws": 10500,
+  "dynare_posterior_draws": 500
+}

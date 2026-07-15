@@ -1,0 +1,92 @@
+{
+  "models": [
+    {
+      "model": "HybridNKMedium",
+      "observations": 160,
+      "map_success": true,
+      "negative_log_posterior_map": -1362.5265914149713,
+      "acceptance_rate": 0.2048,
+      "posterior_draws": 1500,
+      "map_economic": {
+        "h": 0.6522649479461303,
+        "gamma_pi": 0.29875369043330563,
+        "rho_i": 0.75340175823128,
+        "phi_pi": 1.7189146441410172,
+        "phi_x": 0.24729363184501774,
+        "rho_z": 0.7541091261039264,
+        "rho_u": 0.5990101093079296,
+        "rho_m": 0.3413144314810626,
+        "sig_z": 0.1920086912975326,
+        "sig_u": 0.12331506445181868,
+        "sig_m": 0.07824123054974354
+      },
+      "posterior_mean": {
+        "h": 0.6524711848634726,
+        "gamma_pi": 0.29946830631978966,
+        "rho_i": 0.7543978665041865,
+        "phi_pi": 1.7236814171508685,
+        "phi_x": 0.2485005009544204,
+        "rho_z": 0.7547893208416426,
+        "rho_u": 0.5976831141297342,
+        "rho_m": 0.33494067251513926,
+        "sig_z": 0.19136792089269747,
+        "sig_u": 0.11983481026160973,
+        "sig_m": 0.07636044298934265
+      }
+    },
+    {
+      "model": "SmallOpenEconomyNK",
+      "observations": 160,
+      "map_success": true,
+      "negative_log_posterior_map": -1534.0145334654696,
+      "acceptance_rate": 0.2384,
+      "posterior_draws": 1500,
+      "map_economic": {
+        "rho_i": 0.7975499625417015,
+        "phi_pi": 1.5888132931663381,
+        "phi_x": 0.20029861873268132,
+        "phi_q": 0.0713891685301204,
+        "rho_q": 0.7049348882146258,
+        "rho_r": 0.7989303727033381,
+        "rho_u": 0.5269602084318098,
+        "rho_m": 0.27830733410192005,
+        "sig_q": 0.11038233910422603,
+        "sig_r": 0.13775964806656163,
+        "sig_u": 0.10547978601948851,
+        "sig_m": 0.07195674533265735
+      },
+      "posterior_mean": {
+        "rho_i": 0.7981613798901845,
+        "phi_pi": 1.5926714238580784,
+        "phi_x": 0.20097636240377673,
+        "phi_q": 0.08295352648012586,
+        "rho_q": 0.7478446623990648,
+        "rho_r": 0.7996642917683985,
+        "rho_u": 0.5245871415827692,
+        "rho_m": 0.27310144081868454,
+        "sig_q": 0.11033300299668948,
+        "sig_r": 0.13863316104838408,
+        "sig_u": 0.10889164250385712,
+        "sig_m": 0.07425766691582333
+      }
+    }
+  ],
+  "dynare_comparison": {
+    "bk": [
+      1,
+      1
+    ],
+    "dynare_log_likelihood": -555.4646535600904,
+    "pydsgeforge_log_likelihood": -555.4646535591766,
+    "absolute_log_likelihood_difference": 9.138148016063496e-10,
+    "dynare_log_posterior": -586.7712107415508,
+    "pydsgeforge_log_posterior_at_dynare_mode": -586.771210740637,
+    "absolute_log_posterior_difference": 9.138148016063496e-10,
+    "maximum_irf_difference": 9.992007221626409e-16,
+    "posterior_validation_points": 25,
+    "maximum_log_posterior_difference_on_dynare_draws": 1.8225136955152266e-09,
+    "python_mcmc_acceptance_rate": 0.30391666666666667,
+    "python_posterior_draws": 10500,
+    "dynare_posterior_draws": 500
+  }
+}

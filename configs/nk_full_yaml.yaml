@@ -61,7 +61,7 @@ parameters:
       bounds: {lower: 0.05, upper: 10.00}
       prior:
         family: invgamma1
-        params: {s: 0.10875628191089724, nu: 4.175125642356515}
+        params: {s: 0.10875628193155429, nu: 4.175125638631085}
     sig_s:
       symbol: sig_s
       transform: exp
@@ -69,7 +69,7 @@ parameters:
       bounds: {lower: 0.05, upper: 10.00}
       prior:
         family: invgamma1
-        params: {s: 0.10875628191089724, nu: 4.175125642356515}
+        params: {s: 0.10875628193155429, nu: 4.175125638631085}
     sig_m:
       symbol: sig_m
       transform: exp
@@ -77,7 +77,7 @@ parameters:
       bounds: {lower: 0.05, upper: 10.00}
       prior:
         family: invgamma1
-        params: {s: 0.10875628191089724, nu: 4.175125642356515}
+        params: {s: 0.10875628193155429, nu: 4.175125638631085}
   theta_econ:
     beta: 0.99
     sigma: 1.50
