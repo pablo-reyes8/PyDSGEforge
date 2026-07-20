@@ -301,3 +301,7 @@ PyDSGEforge is released under the [MIT License](LICENSE).
   [doi:10.1023/A:1013825826056](https://doi.org/10.1023/A:1013825826056).
 - Jacobo, J. (2025). *Una introducción a los métodos de máxima entropía y de
   inferencia bayesiana en econometría*. Universidad Externado de Colombia.
+
+## License
+
+This project is licensed under the **MIT License** — you are free to use, modify, and distribute this code, provided that appropriate credit is given to the author.
