@@ -3,7 +3,11 @@ name: CI
 on:
   push:
     branches: ["main", "master"]
+    paths-ignore:
+      - "README.md"
   pull_request:
+    paths-ignore:
+      - "README.md"
   workflow_dispatch:
 
 permissions:
