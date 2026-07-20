@@ -11,7 +11,7 @@
 [![Cite software](https://img.shields.io/badge/cite-CITATION.cff-blueviolet.svg)](CITATION.cff)
 [![Docker](https://img.shields.io/badge/container-Docker-2496ED?logo=docker&logoColor=white)](Dockerfile)
 
-Symbolic equations → linear rational-expectations solution → Kalman likelihood → MAP/MCMC → posterior IRFs.
+Symbolic equations → rational-expectations solution → Kalman likelihood → MAP/MCMC → posterior diagnostics and IRFs.
 
 </div>
 
@@ -19,6 +19,7 @@ Symbolic equations → linear rational-expectations solution → Kalman likeliho
 
 - [Dynare parity](#dynare-parity)
 - [Realistic DSGE showcases](#realistic-dsge-showcases)
+- [Bayesian diagnostics, not just estimates](#bayesian-diagnostics-not-just-estimates)
 - [Why PyDSGEforge](#why-pydsgeforge)
 - [Installation](#installation)
 - [Quick start](#quick-start)
@@ -98,6 +99,41 @@ Machine-readable results live in
 [`outputs/showcase_report.json`](outputs/showcase_report.json). Notebook-ready
 cells for both models are in
 [`notebooks/showcase_more_models.ipynb`](notebooks/showcase_more_models.ipynb).
+
+## Bayesian diagnostics, not just estimates
+
+PyDSGEforge goes beyond producing a posterior mode or a collection of MCMC
+draws. Its analysis layer turns the retained chain into a detailed assessment
+of posterior uncertainty and sampling quality, directly in the economic
+parameter space.
+
+- **Effective sample size (ESS):** estimates how much independent information
+  remains after accounting for serial correlation in the chain.
+- **Monte Carlo precision:** reports integrated autocorrelation time and Monte
+  Carlo standard error (MCSE) for each selected parameter.
+- **Credible regions:** computes configurable highest posterior density
+  intervals (HPDI), together with posterior mean, median, and standard
+  deviation.
+- **Visual convergence checks:** produces trace plots, running means, posterior
+  densities, and HPDI overlays, complemented by the sampler acceptance rate and
+  explicit burn-in accounting.
+- **Economic interpretation:** compares prior and posterior distributions and
+  propagates parameter uncertainty into posterior impulse-response bands.
+
+The diagnostics are available from the same fitted model object:
+
+```python
+diagnostics = model.analyze_posteriors(
+    subset=["beta", "kappa", "phi_pi"],
+    plot=True,
+    describe=True,
+    return_data=True,
+)
+```
+
+This makes estimation, uncertainty quantification, sampling diagnostics, and
+economic interpretation part of one reproducible workflow rather than separate
+post-processing steps.
 
 ## Why PyDSGEforge
 
