@@ -1,0 +1,14 @@
+# Excluir notebooks del cálculo de lenguajes
+*.ipynb linguist-vendored
+
+# Excluir imágenes y figuras (no cuentan como código)
+*.png linguist-vendored
+*.jpg linguist-vendored
+*.jpeg linguist-vendored
+*.gif linguist-vendored
+
+# Excluir carpeta de datos (no afecta estadísticas de lenguajes)
+data/* linguist-vendored
+
+# Asegurar que el código principal se cuenta como Python
+*.py linguist-language=Python
