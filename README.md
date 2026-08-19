@@ -2,7 +2,7 @@
 
 # PyDSGEforge
 
-**A general, YAML-first DSGE solver and Bayesian estimation toolkit implemented in Python.**
+**A general, YAML based DSGE solver and Bayesian estimation toolkit implemented in Python.**
 
 [![CI](https://github.com/pablo-reyes8/PyDSGEforge/actions/workflows/ci.yml/badge.svg)](https://github.com/pablo-reyes8/PyDSGEforge/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
