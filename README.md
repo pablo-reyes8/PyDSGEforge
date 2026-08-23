@@ -340,4 +340,4 @@ PyDSGEforge is released under the [MIT License](LICENSE).
 
 ## License
 
-This project is licensed under the **MIT License** — you are free to use, modify, and distribute this code, provided that appropriate credit is given to the author.
+This project is licensed under the **MIT License**. You are free to use, modify, and distribute this code, provided that appropriate credit is given to the author.
