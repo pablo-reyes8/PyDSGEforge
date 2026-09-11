@@ -327,7 +327,6 @@ PyDSGEforge is released under the [MIT License](LICENSE).
 
 - Add more cross-implementation fixtures and period-by-period Kalman diagnostics.
 - Extend nonlinear steady-state and higher-order approximation workflows.
-- Stabilize the public API and publish versioned documentation and packages.
 - Expand diagnostics for convergence, identification, and posterior predictive checks.
 
 ## References
