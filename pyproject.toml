@@ -35,11 +35,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "build>=1.6.0",
+    "build>=1.6.1",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
-    "ruff>=0.16.5",
+    "ruff>=0.16.9",
 ]
 speed = [
     "numba>=0.67.0",
